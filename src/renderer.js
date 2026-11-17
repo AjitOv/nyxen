@@ -760,6 +760,194 @@ void main() { fragColor = vec4(0.01, 0.12, 0.35, uAlpha); }
     }
     return true;
   }
+
+  // ----------------------------------------------------------------
+  // Battle Royale ("Apex Predator") Render Passes
+  // ----------------------------------------------------------------
+
+  // The Red Tide: Cylindrical glowing crimson wall
+  renderStormWall(center, radius, time) {
+    if (radius <= 0) return;
+    const gl = this.gl;
+
+    if (!this.programStorm) {
+      const vs = `#version 300 es
+layout(location = 0) in vec3 aPos;
+uniform mat4 uViewProj;
+uniform mat4 uModel;
+uniform float uTime;
+out vec3 vWorldPos;
+
+void main() {
+  vec4 wp = uModel * vec4(aPos, 1.0);
+  wp.x += sin(uTime * 2.0 + aPos.y * 0.15) * 0.6;
+  wp.z += cos(uTime * 2.5 + aPos.x * 0.15) * 0.6;
+  vWorldPos = wp.xyz;
+  gl_Position = uViewProj * wp;
+}
+`;
+      const fs = `#version 300 es
+precision highp float;
+in vec3 vWorldPos;
+uniform vec3 uCamPos;
+uniform float uRadius;
+uniform vec2 uCenter;
+uniform float uTime;
+out vec4 fragColor;
+
+void main() {
+  float d = length(vWorldPos.xz - uCenter);
+  float distToWall = abs(d - uRadius);
+  float rim = smoothstep(3.5, 0.0, distToWall);
+
+  // Animated wave rings surging through the wall
+  float ripple = sin(vWorldPos.y * 0.4 + uTime * 3.5) * 0.25 + 0.75;
+  vec3 crimson = vec3(0.95, 0.08, 0.18);
+  vec3 violet  = vec3(0.75, 0.05, 0.85);
+  vec3 col = mix(crimson, violet, sin(uTime * 1.5 + vWorldPos.y * 0.1) * 0.5 + 0.5);
+
+  float alpha = (0.28 + 0.45 * rim) * ripple;
+  fragColor = vec4(col, alpha);
+}
+`;
+      this.programStorm = this.createGLProgram(vs, fs);
+      this.uStorm = this.getUniformLocations(this.programStorm, ['uViewProj', 'uModel', 'uCamPos', 'uRadius', 'uCenter', 'uTime']);
+
+      // 64-segment cylinder ring mesh
+      const segs = 64;
+      const pos = [];
+      const idx = [];
+      for (let i = 0; i <= segs; i++) {
+        const u = i / segs;
+        const ang = u * Math.PI * 2;
+        const x = Math.cos(ang);
+        const z = Math.sin(ang);
+        pos.push(x, -65.0, z); // Bottom
+        pos.push(x, 2.0, z);   // Top
+      }
+      for (let i = 0; i < segs; i++) {
+        const b = i * 2;
+        idx.push(b, b + 1, b + 2);
+        idx.push(b + 1, b + 3, b + 2);
+      }
+
+      const vao = gl.createVertexArray();
+      gl.bindVertexArray(vao);
+      const vb = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, vb);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(pos), gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(0);
+      gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+
+      const ib = gl.createBuffer();
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib);
+      gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(idx), gl.STATIC_DRAW);
+      gl.bindVertexArray(null);
+
+      this.stormMesh = { vao, count: idx.length };
+    }
+
+    gl.useProgram(this.programStorm);
+    gl.uniformMatrix4fv(this.uStorm.uViewProj, false, this.viewProjMatrix);
+    gl.uniform3fv(this.uStorm.uCamPos, this.camPos);
+    gl.uniform1f(this.uStorm.uRadius, radius);
+    gl.uniform2f(this.uStorm.uCenter, center[0], center[1]);
+    gl.uniform1f(this.uStorm.uTime, time);
+
+    const m = Mat4.create();
+    m[0] = radius; m[10] = radius;
+    m[12] = center[0]; m[14] = center[1];
+    gl.uniformMatrix4fv(this.uStorm.uModel, false, m);
+
+    gl.disable(gl.CULL_FACE);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+    gl.bindVertexArray(this.stormMesh.vao);
+    gl.drawElements(gl.TRIANGLES, this.stormMesh.count, gl.UNSIGNED_SHORT, 0);
+    gl.bindVertexArray(null);
+
+    gl.disable(gl.BLEND);
+    gl.enable(gl.CULL_FACE);
+  }
+
+  // Water Jet and Venom Spine Projectiles
+  renderProjectiles(projectiles) {
+    if (!projectiles || projectiles.length === 0) return;
+    const gl = this.gl;
+    const count = projectiles.length;
+
+    if (!this.projBuffer || this.projBuffer.length < count * 4) {
+      this.projBuffer = new Float32Array(Math.max(64, count * 2) * 4);
+    }
+
+    for (let i = 0; i < count; i++) {
+      const p = projectiles[i];
+      this.projBuffer[i * 4 + 0] = p.pos[0];
+      this.projBuffer[i * 4 + 1] = p.pos[1];
+      this.projBuffer[i * 4 + 2] = p.pos[2];
+      this.projBuffer[i * 4 + 3] = (p.radius || 0.5) * 2.2;
+    }
+
+    gl.useProgram(this.programParticles);
+    gl.uniformMatrix4fv(this.uParticles.uViewProj, false, this.viewProjMatrix);
+    gl.uniform3fv(this.uParticles.uCamPos, this.camPos);
+    gl.uniform1f(this.uParticles.uTime, this.time);
+    gl.uniform3fv(this.uParticles.uWaterCol, this.waterColor);
+
+    if (!this.projVBO) {
+      this.projVBO = gl.createBuffer();
+      this.projVAO = gl.createVertexArray();
+      gl.bindVertexArray(this.projVAO);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.projVBO);
+      gl.enableVertexAttribArray(0);
+      gl.vertexAttribPointer(0, 4, gl.FLOAT, false, 0, 0);
+      gl.bindVertexArray(null);
+    }
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.projVBO);
+    gl.bufferData(gl.ARRAY_BUFFER, this.projBuffer.subarray(0, count * 4), gl.DYNAMIC_DRAW);
+
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+    gl.depthMask(false);
+
+    gl.bindVertexArray(this.projVAO);
+    gl.drawArrays(gl.POINTS, 0, count);
+    gl.bindVertexArray(null);
+
+    gl.depthMask(true);
+    gl.disable(gl.BLEND);
+  }
+
+  // Clam Shell and Treasure Loot Crates
+  renderLootCrates(crates, pearlGPU, time) {
+    if (!crates || crates.length === 0 || !pearlGPU) return;
+    const gl = this.gl;
+    gl.useProgram(this.programSolid);
+
+    const m = Mat4.create();
+    gl.bindVertexArray(pearlGPU.vao);
+
+    for (const crate of crates) {
+      if (crate.opened) continue;
+      const floatY = crate.pos[1] + Math.sin(time * 3.0 + crate.pos[0]) * 0.2;
+      const s = crate.scale * (1.0 + 0.12 * Math.sin(time * 4.0));
+
+      m[0] = s; m[5] = s; m[10] = s;
+      m[12] = crate.pos[0];
+      m[13] = floatY;
+      m[14] = crate.pos[2];
+
+      const tint = crate.type.includes('shield') ? [0.2, 0.85, 1.0] : [0.3, 1.0, 0.45];
+      gl.uniform3fv(this.uSolid.uColorTint, tint);
+      gl.uniformMatrix4fv(this.uSolid.uModel, false, m);
+
+      gl.drawElements(gl.TRIANGLES, pearlGPU.indexCount, pearlGPU.indexType, 0);
+    }
+    gl.bindVertexArray(null);
+    gl.uniform3fv(this.uSolid.uColorTint, [1, 1, 1]);
+  }
 }
 
 // ----------------------------------------------------------------

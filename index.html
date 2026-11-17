@@ -223,6 +223,147 @@
       to   { opacity: 0.55; }
     }
 
+    /* Battle Royale Overlay & Crosshair */
+    #damage-vignette {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: radial-gradient(circle at center, transparent 40%, rgba(220, 38, 38, 0.65) 100%);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.1s ease-out;
+      z-index: 15;
+    }
+
+    #hud-crosshair {
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 24px; height: 24px;
+      pointer-events: none;
+      z-index: 20;
+    }
+    #hud-crosshair::before, #hud-crosshair::after {
+      content: '';
+      position: absolute;
+      background: rgba(34, 211, 238, 0.85);
+      box-shadow: 0 0 6px rgba(34, 211, 238, 0.8);
+    }
+    #hud-crosshair::before {
+      top: 11px; left: 0; width: 24px; height: 2px;
+    }
+    #hud-crosshair::after {
+      top: 0; left: 11px; width: 2px; height: 24px;
+    }
+    .crosshair-dot {
+      position: absolute;
+      top: 10px; left: 10px;
+      width: 4px; height: 4px;
+      background: #fff;
+      border-radius: 50%;
+    }
+
+    #hit-marker {
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 20px; height: 20px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.05s ease-out;
+      z-index: 21;
+    }
+    #hit-marker::before, #hit-marker::after {
+      content: '';
+      position: absolute;
+      background: #ef4444;
+      box-shadow: 0 0 8px #ef4444;
+      width: 20px; height: 2px;
+      top: 9px; left: 0;
+    }
+    #hit-marker::before { transform: rotate(45deg); }
+    #hit-marker::after { transform: rotate(-45deg); }
+
+    .hud-royale-banner {
+      background: rgba(15, 23, 42, 0.88);
+      border: 1px solid rgba(239, 68, 68, 0.45);
+      box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
+      backdrop-filter: blur(8px);
+      padding: 6px 16px;
+      border-radius: 20px;
+      display: flex;
+      gap: 16px;
+      font-size: 13px;
+      font-weight: 700;
+      align-items: center;
+      letter-spacing: 0.5px;
+    }
+
+    #kill-feed-container {
+      position: fixed;
+      top: 75px; right: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      pointer-events: none;
+      z-index: 30;
+      max-width: 280px;
+    }
+    .kill-feed-item {
+      background: rgba(15, 23, 42, 0.75);
+      border-left: 3px solid #ef4444;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      color: #cbd5e1;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      animation: kf-slide 0.25s ease-out;
+    }
+    .kf-killer { font-weight: 700; color: #38bdf8; }
+    .kf-victim { font-weight: 700; color: #f87171; }
+    @keyframes kf-slide {
+      from { transform: translateX(20px); opacity: 0; }
+      to   { transform: translateX(0); opacity: 1; }
+    }
+
+    .combat-stat-bar {
+      margin-top: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .combat-bar-track {
+      width: 100%;
+      height: 6px;
+      background: rgba(15, 23, 42, 0.8);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .hp-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #22c55e, #16a34a);
+      box-shadow: 0 0 6px #22c55e;
+      transition: width 0.15s ease-out;
+    }
+    .shield-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #38bdf8, #0284c7);
+      box-shadow: 0 0 6px #38bdf8;
+      transition: width 0.15s ease-out;
+    }
+
+    .royale-btn {
+      background: linear-gradient(135deg, rgba(220, 38, 38, 0.85), rgba(185, 28, 28, 0.95)) !important;
+      border-color: rgba(239, 68, 68, 0.6) !important;
+      color: #fff !important;
+      font-weight: 700 !important;
+    }
+    .royale-btn:hover {
+      background: linear-gradient(135deg, #ef4444, #b91c1c) !important;
+      box-shadow: 0 0 15px rgba(239, 68, 68, 0.7) !important;
+    }
+
     /* Fish Selector Bar */
     .fish-selector-strip {
       background: var(--glass-bg);
@@ -508,6 +649,12 @@
   <!-- WebGL2 / WebGPU Rendering Canvas -->
   <canvas id="canvas"></canvas>
 
+  <!-- Damage Vignette & Combat Crosshair -->
+  <div id="damage-vignette"></div>
+  <div id="hud-crosshair"><div class="crosshair-dot"></div></div>
+  <div id="hit-marker"></div>
+  <div id="kill-feed-container"></div>
+
   <!-- Notification Toast -->
   <div id="notification-toast">✨ Welcome to NYXEN</div>
 
@@ -526,8 +673,16 @@
         <div class="species-badge" style="color: #64748b; font-size: 10px; font-family: monospace;" id="hud-coords">X: +0m, Z: +0m [N 0°]</div>
       </div>
 
+      <!-- Battle Royale Match Telemetry Center Banner -->
+      <div id="hud-royale-box" class="hud-royale-banner" style="display: none;">
+        <div>👑 ALIVE: <span id="hud-royale-alive" style="color: #4ade80;">20</span></div>
+        <div>☠️ KILLS: <span id="hud-royale-kills" style="color: #f87171;">0</span></div>
+        <div>⚠️ ZONE: <span id="hud-royale-zone" style="color: #fbbf24;">1:15 (260m)</span></div>
+      </div>
+
       <div class="hud-top-right">
         <div class="fps-badge" id="hud-fps">60 FPS</div>
+        <button class="glass-btn royale-btn" id="royale-btn" title="Toggle Apex Predator Battle Royale Mode (R / B)">⚔️ ROYALE (R)</button>
         <button class="glass-btn" id="sound-toggle" title="Toggle Sound (M)">🔊</button>
         <button class="glass-btn" id="cam-toggle" title="Toggle Camera (V)"><span id="hud-cam-mode">CHASE CAM</span></button>
         <button class="glass-btn" id="journal-btn" title="Species Encyclopedia & Journal (Tab)">📖 LOG</button>
@@ -551,7 +706,22 @@
           <span class="telemetry-label">PEARLS</span>
           <span class="telemetry-val" id="hud-pearls">0/20</span>
         </div>
-        <div class="stamina-track">
+        <!-- Health & Armor Combat Bars -->
+        <div class="combat-stat-bar">
+          <div style="display: flex; justify-content: space-between; font-size: 10px; color: #4ade80; font-weight: 700;">
+            <span>HEALTH</span><span id="hud-health-val">100 HP</span>
+          </div>
+          <div class="combat-bar-track">
+            <div class="hp-fill" id="hud-health-bar" style="width: 100%;"></div>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 10px; color: #38bdf8; font-weight: 700; margin-top: 2px;">
+            <span>ARMOR</span><span id="hud-shield-val">50 ARMOR</span>
+          </div>
+          <div class="combat-bar-track">
+            <div class="shield-fill" id="hud-shield-bar" style="width: 50%;"></div>
+          </div>
+        </div>
+        <div class="stamina-track" style="margin-top: 5px;">
           <div class="stamina-fill" id="hud-stamina-bar"></div>
         </div>
         <svg id="compass-rose" width="36" height="36" viewBox="-22 -22 44 44" style="display:block; margin: 6px auto 0; opacity: 0.85;">
@@ -725,6 +895,13 @@
           game.input.onToggleMute();
         });
 
+        const royaleBtn = document.getElementById('royale-btn');
+        if (royaleBtn) {
+          royaleBtn.addEventListener('click', () => {
+            game.input.onToggleRoyale();
+          });
+        }
+
         // Mobile burst touch
         const mBurst = document.getElementById('m-burst-btn');
         if (mBurst) {
@@ -794,7 +971,7 @@
 
         // Welcome hint
         setTimeout(() => {
-          game.showToast('Click canvas to lock mouse steering • W/S to swim • 1-8 to switch fish', 5000);
+          game.showToast('Click canvas to lock steering • Left-click: Water Jet • Right-click/F: Venom Barrage • R: Battle Royale', 6000);
         }, 1200);
 
       } catch (err) {

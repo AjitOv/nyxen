@@ -18,6 +18,8 @@ export class InputManager {
       ascend: false,
       descend: false,
       sprint: false,
+      fire: false,
+      fireSecondary: false,
       yaw: 0.0,
       pitch: 0.0
     };
@@ -32,6 +34,7 @@ export class InputManager {
     this.onToggleJournal = null;
     this.onToggleMute = null;
     this.onPhotoMode = null;
+    this.onToggleRoyale = null;
 
     // Touch joystick trackers
     this.touches = new Map();
@@ -101,6 +104,13 @@ export class InputManager {
         case 'Digit9': if (this.onSelectSpecies) this.onSelectSpecies(8); break;
         case 'Digit0': if (this.onSelectSpecies) this.onSelectSpecies(9); break;
         case 'KeyP': if (this.onPhotoMode) this.onPhotoMode(); break;
+        case 'KeyR':
+        case 'KeyB':
+          if (this.onToggleRoyale) this.onToggleRoyale();
+          break;
+        case 'KeyF':
+          this.input.fireSecondary = true;
+          break;
       }
     });
 
@@ -133,7 +143,32 @@ export class InputManager {
         case 'ShiftRight':
           this.input.sprint = false;
           break;
+        case 'KeyF':
+          this.input.fireSecondary = false;
+          break;
       }
+    });
+
+    // Mouse buttons for firing water jet and secondary venom
+    window.addEventListener('mousedown', (e) => {
+      if (e.button === 0) {
+        this.input.fire = true;
+      } else if (e.button === 2) {
+        this.input.fireSecondary = true;
+      }
+    });
+
+    window.addEventListener('mouseup', (e) => {
+      if (e.button === 0) {
+        this.input.fire = false;
+      } else if (e.button === 2) {
+        this.input.fireSecondary = false;
+      }
+    });
+
+    // Prevent context menu on right-click so right-click fires venom spines!
+    this.canvas.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
     });
 
     // PointerLock for smooth mouse look
@@ -249,6 +284,8 @@ export class InputManager {
       ascend: this.input.ascend,
       descend: this.input.descend,
       sprint: this.input.sprint,
+      fire: this.input.fire,
+      fireSecondary: this.input.fireSecondary,
       yaw: this.input.yaw,
       pitch: this.input.pitch
     };

@@ -10,6 +10,7 @@ import { InfiniteOceanWorld, CORE_LANDMARKS } from './world.js';
 import { SPECIES, SPECIES_DATA, buildFishMesh } from './species.js';
 import { MarineAudio } from './audio.js';
 import { InputManager } from './controls.js';
+import { BattleRoyaleManager, MATCH_STATES } from './royale.js';
 import { clamp, floor, atan2, PI } from './math.js';
 
 export class NyxenGame {
@@ -24,7 +25,10 @@ export class NyxenGame {
     this.audio = new MarineAudio();
     this.input = new InputManager(canvas);
 
-    // GPU Meshes Cache for all 8 Species
+    // Battle Royale Engine ("Apex Predator / Fish PUBG")
+    this.royale = new BattleRoyaleManager(this.world, this.physics, this.audio, (t, d) => this.showToast(t, d));
+
+    // GPU Meshes Cache for all Species
     this.speciesGPU = {};
     this.setPiecesGPU = [];
     this.coralMeshesGPU = {};
@@ -217,6 +221,16 @@ export class NyxenGame {
       }
     };
 
+    // Battle Royale Mode Toggle (R key or button)
+    this.input.onToggleRoyale = () => {
+      if (this.royale.state === MATCH_STATES.EXPLORATION) {
+        this.royale.startMatch();
+      } else {
+        this.royale.state = MATCH_STATES.EXPLORATION;
+        this.showToast('Returned to Free Ocean Exploration', 2500);
+      }
+    };
+
     // User first interaction starts Audio Context
     const resumeAudio = () => {
       this.audio.resume();
@@ -280,6 +294,9 @@ export class NyxenGame {
 
     // 2. Physics & Player Fish Update
     this.physics.update(dt, frameInput, (x, z) => this.world.getSeabedHeight(x, z));
+
+    // 2.5 Battle Royale Engine Update ("Apex Predator / Fish PUBG")
+    this.royale.update(dt, this.physics.position, this.physics.forward, frameInput.fire, frameInput.fireSecondary);
 
     // 3. World & Ecosystem Update
     const worldEvents = this.world.update(dt, this.physics.position);
@@ -385,6 +402,40 @@ export class NyxenGame {
     // Render Infinite Water Surface
     this.renderer.renderWaterSurface();
 
+    // Render Battle Royale Entities (Red Tide Storm Wall, Bot Fishes, Projectiles, Clam Crates)
+    if (this.royale.state !== MATCH_STATES.EXPLORATION) {
+      // 1. The Red Tide Wall
+      this.renderer.renderStormWall(this.royale.zoneCenter, this.royale.zoneRadius, this.time);
+
+      // 2. 19 AI Opponent Fish
+      for (const bot of this.royale.bots) {
+        if (!bot.alive) continue;
+        const botMesh = this.speciesGPU[bot.speciesId] || this.speciesGPU[SPECIES.CLOWNFISH];
+        if (botMesh) {
+          const sy = Math.sin(bot.yaw * 0.5);
+          const cy = Math.cos(bot.yaw * 0.5);
+          this.renderer.renderFish(
+            botMesh,
+            bot.pos,
+            [0, sy, 0, cy],
+            bot.tailPhase,
+            bot.isBursting ? 0.35 : 0.22,
+            0.0,
+            bot.spec.scale,
+            false
+          );
+        }
+      }
+
+      // 3. Combat Water Jets & Venom Needles
+      this.renderer.renderProjectiles(this.royale.projectiles);
+
+      // 4. Clam Shell Loot Crates
+      if (this.pearlGPU) {
+        this.renderer.renderLootCrates(this.royale.lootCrates, this.pearlGPU, this.time);
+      }
+    }
+
     // Render Crystalline Marine Snow Particles
     if (this.world.marineSnow) {
       this.renderer.renderParticles(this.world.marineSnow);
@@ -448,5 +499,70 @@ export class NyxenGame {
 
     const camBadge = document.getElementById('hud-cam-mode');
     if (camBadge) camBadge.textContent = this.physics.cameraMode === CAMERA_MODES.FIRST_PERSON ? 'FIRST PERSON' : 'CHASE CAM';
+
+    // -------------------------------------------------------------
+    // Battle Royale HUD Updates
+    // -------------------------------------------------------------
+    const healthBar = document.getElementById('hud-health-bar');
+    if (healthBar) {
+      const hpPct = clamp(this.royale.playerHealth / this.royale.playerMaxHealth * 100, 0, 100);
+      healthBar.style.width = `${hpPct}%`;
+      const hpVal = document.getElementById('hud-health-val');
+      if (hpVal) hpVal.textContent = `${Math.ceil(this.royale.playerHealth)} HP`;
+    }
+
+    const shieldBar = document.getElementById('hud-shield-bar');
+    if (shieldBar) {
+      const shieldPct = clamp(this.royale.playerShield / this.royale.playerMaxShield * 100, 0, 100);
+      shieldBar.style.width = `${shieldPct}%`;
+      const shieldVal = document.getElementById('hud-shield-val');
+      if (shieldVal) shieldVal.textContent = `${Math.ceil(this.royale.playerShield)} ARMOR`;
+    }
+
+    const royaleBox = document.getElementById('hud-royale-box');
+    if (royaleBox) {
+      const inRoyale = this.royale.state !== MATCH_STATES.EXPLORATION;
+      royaleBox.style.display = inRoyale ? 'flex' : 'none';
+
+      if (inRoyale) {
+        const aliveEl = document.getElementById('hud-royale-alive');
+        if (aliveEl) aliveEl.textContent = `${this.royale.getAliveCount()}`;
+
+        const killsEl = document.getElementById('hud-royale-kills');
+        if (killsEl) killsEl.textContent = `${this.royale.kills}`;
+
+        const zoneEl = document.getElementById('hud-royale-zone');
+        if (zoneEl) {
+          const secs = Math.ceil(this.royale.phaseTimer);
+          const mins = Math.floor(secs / 60);
+          const remSecs = (secs % 60).toString().padStart(2, '0');
+          zoneEl.textContent = `${mins}:${remSecs} (${Math.round(this.royale.zoneRadius)}m)`;
+        }
+      }
+    }
+
+    // Damage Vignette Flash
+    const dmgVig = document.getElementById('damage-vignette');
+    if (dmgVig) {
+      dmgVig.style.opacity = this.royale.damageVignetteTimer > 0 ? (this.royale.damageVignetteTimer * 1.6).toFixed(2) : '0';
+    }
+
+    // Hit Marker Flash
+    const hitMarker = document.getElementById('hit-marker');
+    if (hitMarker) {
+      hitMarker.style.opacity = this.royale.hitMarkerTimer > 0 ? '1' : '0';
+    }
+
+    // Kill Feed Rendering
+    const killFeedEl = document.getElementById('kill-feed-container');
+    if (killFeedEl && this.royale.killFeed.length > 0) {
+      killFeedEl.innerHTML = this.royale.killFeed.map(kf => `
+        <div class="kill-feed-item">
+          <span class="kf-killer">${kf.killer}</span>
+          <span class="kf-action">${kf.action}</span>
+          <span class="kf-victim">${kf.victim}</span>
+        </div>
+      `).join('');
+    }
   }
 }

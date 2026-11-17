@@ -121,10 +121,10 @@ export class SharedRenderer {
 
     // Uniform locations caches
     this.uSolid = this.getUniformLocations(this.programSolid, [
-      'uViewProj', 'uCamPos', 'uSunDir', 'uSunCol', 'uWaterCol', 'uTime', 'uModel'
+      'uViewProj', 'uCamPos', 'uSunDir', 'uSunCol', 'uWaterCol', 'uTime', 'uModel', 'uColorTint'
     ]);
     this.uKelp = this.getUniformLocations(this.programKelp, [
-      'uViewProj', 'uCamPos', 'uSunDir', 'uSunCol', 'uWaterCol', 'uTime'
+      'uViewProj', 'uCamPos', 'uSunDir', 'uSunCol', 'uWaterCol', 'uTime', 'uModel'
     ]);
     this.uFish = this.getUniformLocations(this.programFish, [
       'uViewProj', 'uCamPos', 'uSunDir', 'uSunCol', 'uWaterCol', 'uTime',
@@ -284,6 +284,7 @@ export class SharedRenderer {
     gl.uniform3fv(this.uSolid.uSunCol, this.sunColor);
     gl.uniform3fv(this.uSolid.uWaterCol, this.waterColor);
     gl.uniform1f(this.uSolid.uTime, this.time);
+    gl.uniform3fv(this.uSolid.uColorTint, [1, 1, 1]);
 
     const m = Mat4.create();
     gl.uniformMatrix4fv(this.uSolid.uModel, false, m);
@@ -304,6 +305,7 @@ export class SharedRenderer {
     gl.uniform3fv(this.uSolid.uSunCol, this.sunColor);
     gl.uniform3fv(this.uSolid.uWaterCol, this.waterColor);
     gl.uniform1f(this.uSolid.uTime, this.time);
+    gl.uniform3fv(this.uSolid.uColorTint, [1, 1, 1]);
 
     const m = Mat4.create();
     gl.uniformMatrix4fv(this.uSolid.uModel, false, m);
@@ -321,6 +323,7 @@ export class SharedRenderer {
   renderSetPieces(setPiecesGPU) {
     const gl = this.gl;
     gl.useProgram(this.programSolid);
+    gl.uniform3fv(this.uSolid.uColorTint, [1, 1, 1]);
 
     for (const piece of setPiecesGPU) {
       const m = Mat4.create();
@@ -420,10 +423,12 @@ export class SharedRenderer {
     gl.enable(gl.CULL_FACE);
   }
 
+  // FIX #1: Kelp Position Bug — build proper per-instance model matrix
   renderKelpForest(kelpGPU, kelpInstances) {
     const gl = this.gl;
     gl.useProgram(this.programKelp);
 
+    // Shared uniforms hoisted before loop
     gl.uniformMatrix4fv(this.uKelp.uViewProj, false, this.viewProjMatrix);
     gl.uniform3fv(this.uKelp.uCamPos, this.camPos);
     gl.uniform3fv(this.uKelp.uSunDir, this.sunDir);
@@ -438,14 +443,39 @@ export class SharedRenderer {
       const dz = inst.z - this.camPos[2];
       if (dx * dx + dz * dz > 180.0 * 180.0) continue; // Frustum/distance cull
 
+      // Build translation model matrix per instance
+      const m = Mat4.create();
+      m[12] = inst.x;
+      m[13] = inst.y !== undefined ? inst.y : 0;
+      m[14] = inst.z;
+      gl.uniformMatrix4fv(this.uKelp.uModel, false, m);
+
       gl.drawElements(gl.TRIANGLES, kelpGPU.indexCount, kelpGPU.indexType, 0);
     }
     gl.bindVertexArray(null);
   }
 
+  // FIX #8 (Hoist shared uniforms) + FIX #9 (frustum culling) + FIX #11 (per-coral tint)
   renderCoralGardens(coralMeshesGPU, coralInstances) {
     const gl = this.gl;
     gl.useProgram(this.programSolid);
+
+    // Hoist shared uniforms before the loop
+    gl.uniformMatrix4fv(this.uSolid.uViewProj, false, this.viewProjMatrix);
+    gl.uniform3fv(this.uSolid.uCamPos, this.camPos);
+    gl.uniform3fv(this.uSolid.uSunDir, this.sunDir);
+    gl.uniform3fv(this.uSolid.uSunCol, this.sunColor);
+    gl.uniform3fv(this.uSolid.uWaterCol, this.waterColor);
+    gl.uniform1f(this.uSolid.uTime, this.time);
+
+    // Per-coral tint lookup by type
+    const coralTints = {
+      'staghorn':  [1.0, 0.65, 0.4],
+      'brain':     [0.8, 0.5,  0.3],
+      'fan':       [0.9, 0.3,  0.7],
+      'tube':      [0.4, 0.8,  1.0],
+      'mushroom':  [0.6, 1.0,  0.5],
+    };
 
     const m = Mat4.create();
     for (const inst of coralInstances) {
@@ -453,10 +483,13 @@ export class SharedRenderer {
       const dz = inst.z - this.camPos[2];
       if (dx * dx + dz * dz > 140.0 * 140.0) continue; // Distance cull
 
+      // Frustum culling
+      if (!this.isSphereVisible(inst.x, inst.y, inst.z, 4.0)) continue;
+
       const meshGPU = coralMeshesGPU[inst.type] || coralMeshesGPU['staghorn'];
       if (!meshGPU) continue;
 
-      // Model matrix: translate & scale & yaw
+      // Model matrix: translate & scale & yaw (only uModel per instance)
       const cy = Math.cos(inst.yaw), sy = Math.sin(inst.yaw);
       const s = inst.scale;
 
@@ -467,15 +500,31 @@ export class SharedRenderer {
 
       gl.uniformMatrix4fv(this.uSolid.uModel, false, m);
 
+      // Per-coral tint
+      const tint = coralTints[inst.type] || [1, 1, 1];
+      gl.uniform3fv(this.uSolid.uColorTint, tint);
+
       gl.bindVertexArray(meshGPU.vao);
       gl.drawElements(gl.TRIANGLES, meshGPU.indexCount, meshGPU.indexType, 0);
     }
     gl.bindVertexArray(null);
+    // Reset tint
+    gl.uniform3fv(this.uSolid.uColorTint, [1, 1, 1]);
   }
 
+  // FIX #2: Boid rotation bug — proper Y-axis rotation from velocity yaw
+  // FIX #9: Frustum culling per boid
   renderFishSchools(schoolMeshGPU, schools) {
     const gl = this.gl;
     gl.useProgram(this.programSolid);
+
+    gl.uniformMatrix4fv(this.uSolid.uViewProj, false, this.viewProjMatrix);
+    gl.uniform3fv(this.uSolid.uCamPos, this.camPos);
+    gl.uniform3fv(this.uSolid.uSunDir, this.sunDir);
+    gl.uniform3fv(this.uSolid.uSunCol, this.sunColor);
+    gl.uniform3fv(this.uSolid.uWaterCol, this.waterColor);
+    gl.uniform1f(this.uSolid.uTime, this.time);
+    gl.uniform3fv(this.uSolid.uColorTint, [1, 1, 1]);
 
     const m = Mat4.create();
     gl.bindVertexArray(schoolMeshGPU.vao);
@@ -486,10 +535,26 @@ export class SharedRenderer {
         const dz = boid.pos[2] - this.camPos[2];
         if (dx * dx + dz * dz > 120.0 * 120.0) continue;
 
-        m[0] = 0.8; m[5] = 0.8; m[10] = 0.8;
+        // Frustum culling
+        if (!this.isSphereVisible(boid.pos[0], boid.pos[1], boid.pos[2], 2.0)) continue;
+
+        // Extract yaw from velocity and build Y-axis rotation matrix (column-major)
+        const yaw = Math.atan2(boid.vel[0], boid.vel[2]);
+        const cy = Math.cos(yaw), sy = Math.sin(yaw);
+        const s = 0.8;
+
+        // Column-major Y-rotation * scale:
+        // col0: [cy*s, 0,    sy*s, 0]
+        // col1: [0,    s,    0,    0]
+        // col2: [-sy*s,0,    cy*s, 0]
+        // col3: [tx,   ty,   tz,   1]
+        m[0]  =  cy * s; m[1]  = 0;   m[2]  =  sy * s; m[3]  = 0;
+        m[4]  =  0;      m[5]  = s;   m[6]  =  0;      m[7]  = 0;
+        m[8]  = -sy * s; m[9]  = 0;   m[10] =  cy * s; m[11] = 0;
         m[12] = boid.pos[0];
         m[13] = boid.pos[1];
         m[14] = boid.pos[2];
+        m[15] = 1;
 
         gl.uniformMatrix4fv(this.uSolid.uModel, false, m);
         gl.drawElements(gl.TRIANGLES, schoolMeshGPU.indexCount, schoolMeshGPU.indexType, 0);
@@ -501,6 +566,7 @@ export class SharedRenderer {
   renderMantas(mantaMeshGPU, mantas) {
     const gl = this.gl;
     gl.useProgram(this.programSolid);
+    gl.uniform3fv(this.uSolid.uColorTint, [1, 1, 1]);
 
     const m = Mat4.create();
     gl.bindVertexArray(mantaMeshGPU.vao);
@@ -522,6 +588,7 @@ export class SharedRenderer {
   renderPearls(pearlMeshGPU, collectibles, time) {
     const gl = this.gl;
     gl.useProgram(this.programSolid);
+    gl.uniform3fv(this.uSolid.uColorTint, [1, 1, 1]);
 
     const m = Mat4.create();
     gl.bindVertexArray(pearlMeshGPU.vao);
@@ -540,6 +607,158 @@ export class SharedRenderer {
       gl.drawElements(gl.TRIANGLES, pearlMeshGPU.indexCount, pearlMeshGPU.indexType, 0);
     }
     gl.bindVertexArray(null);
+  }
+
+  // ----------------------------------------------------------------
+  // NEW METHODS
+  // ----------------------------------------------------------------
+
+  // FIX #3: renderParticles — renders a Float32Array of [x,y,z,size] particles
+  renderParticles(snowData) {
+    const gl = this.gl;
+    gl.useProgram(this.programParticles);
+
+    // Lazily create snow VBO
+    if (!this.snowVBO) {
+      this.snowVBO = gl.createBuffer();
+    }
+
+    // Upload particle data
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.snowVBO);
+    gl.bufferData(gl.ARRAY_BUFFER, snowData, gl.DYNAMIC_DRAW);
+
+    // Set vertex attrib: location 0 = vec4(x, y, z, size)
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 4, gl.FLOAT, false, 0, 0);
+
+    // Uniforms
+    gl.uniformMatrix4fv(this.uParticles.uViewProj, false, this.viewProjMatrix);
+    gl.uniform3fv(this.uParticles.uCamPos, this.camPos);
+    gl.uniform1f(this.uParticles.uTime, this.time);
+    gl.uniform3fv(this.uParticles.uWaterCol, this.waterColor);
+
+    // Additive blend
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE);
+
+    const count = (snowData.length / 4) | 0;
+    gl.drawArrays(gl.POINTS, 0, count);
+
+    gl.disableVertexAttribArray(0);
+    gl.disable(gl.BLEND);
+    gl.bindBuffer(gl.ARRAY_BUFFER, null);
+  }
+
+  // FIX #4: renderBubbleVents — emit upward-drifting particles from vent positions
+  renderBubbleVents(vents) {
+    const totalParticles = vents.length * 8;
+    if (totalParticles === 0) return;
+
+    if (!this.ventParticleData || this.ventParticleData.length !== totalParticles * 4) {
+      this.ventParticleData = new Float32Array(totalParticles * 4);
+    }
+
+    let idx = 0;
+    for (const vent of vents) {
+      for (let i = 0; i < 8; i++) {
+        const y = vent.y + ((this.time * 0.4 + i * 0.3) % 4.0);
+        this.ventParticleData[idx++] = vent.x;
+        this.ventParticleData[idx++] = y;
+        this.ventParticleData[idx++] = vent.z;
+        this.ventParticleData[idx++] = 1.5; // size
+      }
+    }
+
+    this.renderParticles(this.ventParticleData);
+  }
+
+  // FIX #5: freeChunkGPU — delete GPU resources for a chunk
+  freeChunkGPU(chunk) {
+    if (chunk.gpu) {
+      this.gl.deleteVertexArray(chunk.gpu.vao);
+      chunk.gpu = null;
+    }
+  }
+
+  // FIX #6: updateSunDirection — normalize and store sun direction
+  updateSunDirection(dir) {
+    const len = Math.hypot(dir[0], dir[1], dir[2]) || 1;
+    this.sunDir = [dir[0] / len, dir[1] / len, dir[2] / len];
+  }
+
+  // FIX #7: renderFade — full-screen deep-blue overlay, lazily compiled shader
+  renderFade(alpha) {
+    const gl = this.gl;
+
+    // Lazily compile fade program
+    if (!this.programFade) {
+      const vs = `#version 300 es
+layout(location = 0) in vec2 aPos;
+void main() { gl_Position = vec4(aPos, 0.0, 1.0); }
+`;
+      const fs = `#version 300 es
+precision mediump float;
+uniform float uAlpha;
+out vec4 fragColor;
+void main() { fragColor = vec4(0.01, 0.12, 0.35, uAlpha); }
+`;
+      this.programFade = this.createGLProgram(vs, fs);
+      this.uFade = this.getUniformLocations(this.programFade, ['uAlpha']);
+
+      // Build NDC quad VAO
+      const vao = gl.createVertexArray();
+      gl.bindVertexArray(vao);
+      const vb = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, vb);
+      // 2 triangles covering full screen in NDC
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+        -1, -1,  1, -1,  1,  1,
+        -1, -1,  1,  1, -1,  1
+      ]), gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(0);
+      gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+      gl.bindVertexArray(null);
+      this.fadeMesh = { vao, count: 6 };
+    }
+
+    gl.useProgram(this.programFade);
+    gl.uniform1f(this.uFade.uAlpha, alpha);
+
+    gl.disable(gl.DEPTH_TEST);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+    gl.bindVertexArray(this.fadeMesh.vao);
+    gl.drawArrays(gl.TRIANGLES, 0, this.fadeMesh.count);
+    gl.bindVertexArray(null);
+
+    gl.disable(gl.BLEND);
+    gl.enable(gl.DEPTH_TEST);
+  }
+
+  // FIX #9: isSphereVisible — frustum cull using 4 planes extracted from viewProjMatrix
+  isSphereVisible(x, y, z, r) {
+    const m = this.viewProjMatrix;
+    // Extract 4 frustum planes (left, right, bottom, top) from column-major mat4
+    // Row vectors of clip matrix: row i = [m[i], m[i+4], m[i+8], m[i+12]]
+    // Plane equations (Ax + By + Cz + D): row3 +/- rowN
+    // Left:   row3 + row0
+    // Right:  row3 - row0
+    // Bottom: row3 + row1
+    // Top:    row3 - row1
+    const planes = [
+      [m[3] + m[0],  m[7] + m[4],  m[11] + m[8],  m[15] + m[12]], // left
+      [m[3] - m[0],  m[7] - m[4],  m[11] - m[8],  m[15] - m[12]], // right
+      [m[3] + m[1],  m[7] + m[5],  m[11] + m[9],  m[15] + m[13]], // bottom
+      [m[3] - m[1],  m[7] - m[5],  m[11] - m[9],  m[15] - m[13]], // top
+    ];
+
+    for (const [a, b, c, d] of planes) {
+      const dist = a * x + b * y + c * z + d;
+      const len = Math.sqrt(a * a + b * b + c * c) || 1;
+      if (dist / len < -r) return false;
+    }
+    return true;
   }
 }
 
@@ -571,6 +790,7 @@ void main() {
 }
 `;
 
+// FIX #10 (bioluminescence) + FIX #11 (uColorTint)
 const FS_SOLID = `#version 300 es
 precision highp float;
 
@@ -584,6 +804,7 @@ uniform vec3 uSunDir;
 uniform vec3 uSunCol;
 uniform vec3 uWaterCol;
 uniform float uTime;
+uniform vec3 uColorTint;
 
 out vec4 fragColor;
 
@@ -632,7 +853,9 @@ void main() {
   vec3 ambient = oceanWaterCol * (0.35 + 0.35 * (N.y * 0.5 + 0.5)) * exp(vWorldPos.y * 0.032);
   vec3 sunLight = uSunCol * (NdotL * 0.75 + causticLight) * exp(vWorldPos.y * 0.038);
 
-  vec3 litColor = vColor.rgb * (ambient + sunLight * 0.7);
+  // Apply per-coral/object tint to vertex color
+  vec3 tintedColor = vColor.rgb * uColorTint;
+  vec3 litColor = tintedColor * (ambient + sunLight * 0.7);
 
   // Specular sheen with aquatic blue tint
   vec3 H = normalize(L + V);
@@ -647,6 +870,15 @@ void main() {
   vec3 decay = exp(-vec3(0.092, 0.026, 0.009) * dist);
   vec3 finalColor = mix(oceanWaterCol, litColor, decay) + sunShaftGlow * (1.0 - decay.b);
 
+  // Bioluminescence: deep glow below 30m
+  if (-vWorldPos.y > 30.0) {
+    vec3 bioGlow = vec3(0.05, 0.3, 0.6)
+      * ((sin(uTime * 0.8 + vWorldPos.x * 0.5 + vWorldPos.z * 0.3) * 0.5 + 0.5))
+      * clamp((-vWorldPos.y - 30.0) / 20.0, 0.0, 1.0)
+      * 0.4;
+    finalColor += bioGlow;
+  }
+
   fragColor = vec4(finalColor, 1.0);
 }
 `;
@@ -658,6 +890,7 @@ layout(location = 2) in vec2 aUV;
 layout(location = 3) in vec4 aColor;
 
 uniform mat4 uViewProj;
+uniform mat4 uModel;
 uniform float uTime;
 
 out vec3 vWorldPos;
@@ -673,11 +906,12 @@ void main() {
   pos.x += sway;
   pos.z += cos(uTime * 0.9 + pos.x * 0.08) * (height * 0.04);
 
-  vWorldPos = pos;
+  vec4 wp = uModel * vec4(pos, 1.0);
+  vWorldPos = wp.xyz;
   vNormal = aNormal;
   vUV = aUV;
   vColor = aColor;
-  gl_Position = uViewProj * vec4(pos, 1.0);
+  gl_Position = uViewProj * wp;
 }
 `;
 

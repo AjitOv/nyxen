@@ -14,7 +14,9 @@ export const SPECIES = {
   EMPEROR_ANGELFISH: 'emperor_angelfish',
   LONGNOSE_BUTTERFLY: 'longnose_butterfly',
   MOORISH_IDOL: 'moorish_idol',
-  ROYAL_GRAMMA: 'royal_gramma'
+  ROYAL_GRAMMA: 'royal_gramma',
+  JELLYFISH: 'jellyfish',
+  SEA_TURTLE: 'sea_turtle'
 };
 
 export const SPECIES_DATA = {
@@ -169,6 +171,22 @@ export const SPECIES_DATA = {
     eyeOffset: [0.07, 0.04, 0.20],
     scale: 0.6,
     staminaRegen: 1.25
+  },
+  jellyfish: {
+    id: 'jellyfish', name: 'Moon Jellyfish', scientificName: 'Aurelia aurita',
+    family: 'Ulmaridae', description: 'A translucent ethereal jellyfish with four violet-pink gonads and trailing oral arms. Propels itself by rhythmic bell contractions.',
+    habitat: 'Open water column, 0–200m', lengthCm: 25, scale: 0.9,
+    speed: 3.2, burstSpeed: 4.8, turnRate: 0.6, dragCoeff: 0.92,
+    staminaRegen: 1.8, tailFreq: 1.4, tailAmp: 0.06, pectoralAmp: 0.0,
+    eyeOffset: [0, 0.12, 0.08], swimmingStyle: 'Medusan bell pulse'
+  },
+  sea_turtle: {
+    id: 'sea_turtle', name: 'Green Sea Turtle', scientificName: 'Chelonia mydas',
+    family: 'Cheloniidae', description: 'An ancient graceful ocean wanderer with olive-green carapace, powerful front flippers and serene disposition.',
+    habitat: 'Coastal reefs and open ocean, 0–50m', lengthCm: 95, scale: 2.2,
+    speed: 5.8, burstSpeed: 9.5, turnRate: 0.8, dragCoeff: 0.72,
+    staminaRegen: 0.6, tailFreq: 0.9, tailAmp: 0.03, pectoralAmp: 0.0,
+    eyeOffset: [0.04, 0.03, 0.22], swimmingStyle: 'Diagonal flipper alternation'
   }
 };
 
@@ -206,6 +224,12 @@ export function buildFishMesh(speciesId) {
       break;
     case SPECIES.ROYAL_GRAMMA:
       buildRoyalGramma(mesh);
+      break;
+    case SPECIES.JELLYFISH:
+      buildJellyfish(mesh);
+      break;
+    case SPECIES.SEA_TURTLE:
+      buildSeaTurtle(mesh);
       break;
     default:
       buildClownfish(mesh);
@@ -1059,4 +1083,248 @@ function buildMoorishIdolFilament(mesh) {
   }
 
   mesh.tube(pts, (t) => 0.012 * (1 - t * 0.85) + 0.002, 5, true, true, () => [0.99, 0.99, 0.99, 1.0]);
+}
+
+// ----------------------------------------------------------------
+// 9. Moon Jellyfish (Aurelia aurita)
+// ----------------------------------------------------------------
+function buildJellyfish(mesh) {
+  const bellSegs = 24; // angular segments
+  const bellRings = 10; // radial rings from center to edge
+  const bellR = 0.5;    // bell radius
+  const bellH = 0.2;    // bell height at apex
+
+  // Bell dome — built as a fan of rings from center outward
+  const ringIdx = [];
+  for (let ri = 0; ri <= bellRings; ri++) {
+    const frac = ri / bellRings; // 0 = center, 1 = edge
+    const r = bellR * frac;
+    // Flattened cosine dome profile: y drops from bellH at center to 0 at rim
+    const y = bellH * (1 - frac * frac);
+    // Color blends from top (pale blue-white) to rim (lilac)
+    const tr = 0.9 + (0.85 - 0.9) * frac;
+    const tg = 0.95 + (0.7 - 0.95) * frac;
+    const tb = 1.0 + (0.9 - 1.0) * frac;
+    const ta = 0.65 + (0.55 - 0.65) * frac;
+
+    const row = [];
+    for (let s = 0; s < bellSegs; s++) {
+      const angle = (s / bellSegs) * TAU;
+      const ca = cos(angle), sa = sin(angle);
+      const nx = ca * frac, nz = sa * frac, ny = 1 - frac;
+      const len = sqrt(nx * nx + ny * ny + nz * nz) || 1;
+      row.push(mesh.vertex(ca * r, y, sa * r, nx / len, ny / len, nz / len, s / bellSegs, frac, tr, tg, tb, ta));
+    }
+    ringIdx.push(row);
+  }
+
+  // Center cap vertex
+  const centerV = mesh.vertex(0, bellH, 0, 0, 1, 0, 0.5, 0, 0.9, 0.95, 1.0, 0.65);
+
+  // Triangulate center fan (innermost ring to center)
+  for (let s = 0; s < bellSegs; s++) {
+    const ns = (s + 1) % bellSegs;
+    mesh.tri(centerV, ringIdx[0][s], ringIdx[0][ns]);
+  }
+
+  // Connect rings
+  for (let ri = 0; ri < bellRings; ri++) {
+    for (let s = 0; s < bellSegs; s++) {
+      const ns = (s + 1) % bellSegs;
+      mesh.quad(
+        ringIdx[ri][s], ringIdx[ri][ns],
+        ringIdx[ri + 1][ns], ringIdx[ri + 1][s]
+      );
+    }
+  }
+
+  // Flat bottom rim ring (underside disk at y=0)
+  const outerRow = ringIdx[bellRings];
+  const rimCenter = mesh.vertex(0, 0, 0, 0, -1, 0, 0.5, 0.5, 0.85, 0.7, 0.9, 0.55);
+  for (let s = 0; s < bellSegs; s++) {
+    const ns = (s + 1) % bellSegs;
+    // Rim vertex at y=0 from outer edge
+    const angle0 = (s / bellSegs) * TAU;
+    const angle1 = ((s + 1) / bellSegs) * TAU;
+    const rv0 = mesh.vertex(cos(angle0) * bellR, 0, sin(angle0) * bellR, 0, -1, 0, s / bellSegs, 1, 0.85, 0.7, 0.9, 0.55);
+    const rv1 = mesh.vertex(cos(angle1) * bellR, 0, sin(angle1) * bellR, 0, -1, 0, (s + 1) / bellSegs, 1, 0.85, 0.7, 0.9, 0.55);
+    mesh.tri(rimCenter, rv1, rv0);
+  }
+
+  // 4 Gonads — small pink-violet inner spots at 90° intervals inside the bell
+  const gonadPositions = [[0.15, 0, 0], [0, 0, 0.15], [-0.15, 0, 0], [0, 0, -0.15]];
+  for (const [gx, gy, gz] of gonadPositions) {
+    const gsegs = 8;
+    const gr = 0.045;
+    const gy_top = bellH * (1 - (0.3 * 0.3)); // dome height at r=0.15
+    const gcenter = mesh.vertex(gx, gy_top + 0.002, gz, 0, 1, 0, 0.5, 0.5, 0.9, 0.5, 0.75, 0.9);
+    for (let s = 0; s < gsegs; s++) {
+      const a0 = (s / gsegs) * TAU;
+      const a1 = ((s + 1) / gsegs) * TAU;
+      const e0 = mesh.vertex(gx + cos(a0) * gr, gy_top, gz + sin(a0) * gr, 0, 1, 0, 0, 0, 0.9, 0.5, 0.75, 0.9);
+      const e1 = mesh.vertex(gx + cos(a1) * gr, gy_top, gz + sin(a1) * gr, 0, 1, 0, 1, 0, 0.9, 0.5, 0.75, 0.9);
+      mesh.tri(gcenter, e0, e1);
+    }
+  }
+
+  // 6 Tentacle strips — thin elongated triangles hanging from rim, y from -0.2 to -1.2
+  const numTentacles = 6;
+  for (let t = 0; t < numTentacles; t++) {
+    const angle = (t / numTentacles) * TAU;
+    const tx = cos(angle) * bellR;
+    const tz = sin(angle) * bellR;
+    const tWidth = 0.025;
+    const tTop = -0.2;
+    const tBot = -1.2;
+    // Two thin side vertices at top and a point at bottom
+    const perp = [-sin(angle), 0, cos(angle)];
+    const a = mesh.vertex(tx + perp[0] * tWidth, tTop, tz + perp[2] * tWidth, 0, 0, -1, 0, 0, 0.75, 0.6, 0.85, 0.3);
+    const b = mesh.vertex(tx - perp[0] * tWidth, tTop, tz - perp[2] * tWidth, 0, 0, -1, 1, 0, 0.75, 0.6, 0.85, 0.3);
+    const c = mesh.vertex(tx, tBot, tz, 0, 0, -1, 0.5, 1, 0.75, 0.6, 0.85, 0.3);
+    mesh.tri(a, b, c);
+    mesh.tri(a, c, b); // double-sided
+  }
+}
+
+// ----------------------------------------------------------------
+// 10. Green Sea Turtle (Chelonia mydas)
+// ----------------------------------------------------------------
+function buildSeaTurtle(mesh) {
+  // --- Carapace (shell dome) using rings ---
+  const shellRings = 14;
+  const shellSegs = 20;
+  const shellLenHalf = 0.5;   // half length along Z
+  const shellW = 0.3;          // half width X
+  const shellH = 0.325;        // dome height Y
+
+  const shellRingIdx = [];
+  for (let ri = 0; ri <= shellRings; ri++) {
+    const t = ri / shellRings;      // 0 = front, 1 = back
+    const z = (0.5 - t) * (shellLenHalf * 2);
+    // Oval cross section: varies width along Z
+    const profileT = sin(t * PI);
+    const rw = shellW * profileT;
+    const rh = shellH * profileT;
+
+    const row = [];
+    for (let s = 0; s < shellSegs; s++) {
+      const angle = (s / shellSegs) * TAU;
+      const ca = cos(angle), sa = sin(angle);
+      // Only upper dome (y >= 0 for carapace), full ring
+      const x = ca * rw;
+      const y = sa * rh;
+
+      // Shell color: olive green (top), pale yellow (bottom/plastron)
+      const cr = y > 0 ? 0.25 : 0.75;
+      const cg = y > 0 ? 0.42 : 0.72;
+      const cb = y > 0 ? 0.22 : 0.50;
+
+      row.push(mesh.vertex(x, y, z, ca, sa, 0, s / shellSegs, t, cr, cg, cb, 1.0));
+    }
+    shellRingIdx.push(row);
+  }
+
+  // Connect shell rings
+  for (let ri = 0; ri < shellRings; ri++) {
+    for (let s = 0; s < shellSegs; s++) {
+      const ns = (s + 1) % shellSegs;
+      mesh.quad(
+        shellRingIdx[ri][s], shellRingIdx[ri][ns],
+        shellRingIdx[ri + 1][ns], shellRingIdx[ri + 1][s]
+      );
+    }
+  }
+
+  // --- Head (small oval at front) ---
+  const headZ = 0.55;
+  const headRings = 6;
+  const headSegs = 12;
+  const headRingIdx = [];
+  for (let ri = 0; ri <= headRings; ri++) {
+    const t = ri / headRings;
+    const hz = headZ + t * 0.22;
+    const profileT = sin(t * PI);
+    const hrw = 0.10 * profileT;
+    const hrh = 0.08 * profileT;
+    const row = [];
+    for (let s = 0; s < headSegs; s++) {
+      const angle = (s / headSegs) * TAU;
+      const ca = cos(angle), sa = sin(angle);
+      row.push(mesh.vertex(ca * hrw, sa * hrh, hz, ca, sa, 0, s / headSegs, t, 0.35, 0.52, 0.3, 1.0));
+    }
+    headRingIdx.push(row);
+  }
+  // End caps for head
+  const headFront = mesh.vertex(0, 0, headZ, 0, 0, -1, 0.5, 0, 0.35, 0.52, 0.3, 1.0);
+  const headBack = mesh.vertex(0, 0, headZ + 0.22, 0, 0, 1, 0.5, 1, 0.35, 0.52, 0.3, 1.0);
+  for (let s = 0; s < headSegs; s++) {
+    const ns = (s + 1) % headSegs;
+    mesh.tri(headFront, headRingIdx[0][ns], headRingIdx[0][s]);
+    mesh.tri(headBack, headRingIdx[headRings][s], headRingIdx[headRings][ns]);
+  }
+  for (let ri = 0; ri < headRings; ri++) {
+    for (let s = 0; s < headSegs; s++) {
+      const ns = (s + 1) % headSegs;
+      mesh.quad(
+        headRingIdx[ri][s], headRingIdx[ri][ns],
+        headRingIdx[ri + 1][ns], headRingIdx[ri + 1][s]
+      );
+    }
+  }
+
+  // --- 4 Flippers ---
+  // Front flippers (large, elongated, length 0.8), left and right
+  buildTurtleFlipper(mesh, 1,  0.0,  0.3, 0.8, true);
+  buildTurtleFlipper(mesh, -1, 0.0,  0.3, 0.8, true);
+  // Rear flippers (small, length 0.35)
+  buildTurtleFlipper(mesh, 1,  0.0, -0.3, 0.35, false);
+  buildTurtleFlipper(mesh, -1, 0.0, -0.3, 0.35, false);
+
+  // --- Short stubby tail ---
+  const tailPts = [
+    [0, 0, -0.5],
+    [0, -0.02, -0.6],
+    [0, -0.03, -0.65]
+  ];
+  mesh.tube(tailPts, (t) => 0.04 * (1 - t * 0.85), 8, true, true, () => [0.22, 0.38, 0.2, 1.0]);
+}
+
+function buildTurtleFlipper(mesh, side, x0, z0, length, isFront) {
+  // Elongated triangular wing flipper
+  const flipW = isFront ? 0.12 : 0.07;
+  const flipCol = [0.22, 0.38, 0.2, 1.0];
+  const steps = 6;
+
+  const rootX = side * 0.28;
+  const rootY = 0.0;
+  const rootZ = z0;
+
+  // Tip extends outward and slightly forward/back
+  const tipX = side * (0.28 + length * 0.85);
+  const tipY = -0.04;
+  const tipZ = z0 + (isFront ? 0.1 : -0.05);
+
+  for (let i = 0; i < steps; i++) {
+    const t0 = i / steps;
+    const t1 = (i + 1) / steps;
+
+    const lx0 = rootX + (tipX - rootX) * t0;
+    const ly0 = rootY + (tipY - rootY) * t0;
+    const lz0 = rootZ + (tipZ - rootZ) * t0;
+
+    const lx1 = rootX + (tipX - rootX) * t1;
+    const ly1 = rootY + (tipY - rootY) * t1;
+    const lz1 = rootZ + (tipZ - rootZ) * t1;
+
+    const spread = flipW * (1 - t0 * 0.75);
+    const spread1 = flipW * (1 - t1 * 0.75);
+
+    const a = mesh.vertex(lx0, ly0 + spread, lz0, 0, 1, 0, t0, 0, flipCol[0], flipCol[1], flipCol[2], flipCol[3]);
+    const b = mesh.vertex(lx0, ly0 - spread, lz0, 0, -1, 0, t0, 1, flipCol[0], flipCol[1], flipCol[2], flipCol[3]);
+    const c = mesh.vertex(lx1, ly1 + spread1, lz1, 0, 1, 0, t1, 0, flipCol[0], flipCol[1], flipCol[2], flipCol[3]);
+    const d = mesh.vertex(lx1, ly1 - spread1, lz1, 0, -1, 0, t1, 1, flipCol[0], flipCol[1], flipCol[2], flipCol[3]);
+
+    mesh.quad(a, b, d, c);
+    mesh.quad(a, c, d, b); // double-sided
+  }
 }

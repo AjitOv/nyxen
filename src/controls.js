@@ -31,6 +31,7 @@ export class InputManager {
     this.onSelectSpecies = null;
     this.onToggleJournal = null;
     this.onToggleMute = null;
+    this.onPhotoMode = null;
 
     // Touch joystick trackers
     this.touches = new Map();
@@ -97,6 +98,9 @@ export class InputManager {
         case 'Digit6': if (this.onSelectSpecies) this.onSelectSpecies(5); break;
         case 'Digit7': if (this.onSelectSpecies) this.onSelectSpecies(6); break;
         case 'Digit8': if (this.onSelectSpecies) this.onSelectSpecies(7); break;
+        case 'Digit9': if (this.onSelectSpecies) this.onSelectSpecies(8); break;
+        case 'Digit0': if (this.onSelectSpecies) this.onSelectSpecies(9); break;
+        case 'KeyP': if (this.onPhotoMode) this.onPhotoMode(); break;
       }
     });
 

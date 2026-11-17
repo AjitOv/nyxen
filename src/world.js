@@ -50,6 +50,13 @@ export class InfiniteOceanWorld {
     this.mantaRays = [];
     this.marineSnow = [];
 
+    // Day/night cycle
+    this.timeOfDay = 0.25; // start at dawn (0=midnight, 0.5=noon, 1=midnight)
+    this.daySpeed = 0.004; // full cycle in ~4 real minutes
+
+    // Evicted chunk tracking for GPU cleanup
+    this.evictedChunks = [];
+
     // Set pieces in starting region
     this.setPieceMeshes = [];
 
@@ -160,6 +167,9 @@ export class InfiniteOceanWorld {
   // Infinite Chunk Streaming
   // ----------------------------------------------------------------
   updateChunks(playerX, playerZ) {
+    // Clear evicted chunks from previous call
+    this.evictedChunks = [];
+
     const cx = Math.floor((playerX + this.chunkSize * 0.5) / this.chunkSize);
     const cz = Math.floor((playerZ + this.chunkSize * 0.5) / this.chunkSize);
 
@@ -195,6 +205,7 @@ export class InfiniteOceanWorld {
     // Evict chunks outside view radius
     for (const [key, chunk] of this.activeChunks.entries()) {
       if (!requiredKeys.has(key)) {
+        this.evictedChunks.push(chunk);
         this.activeChunks.delete(key);
       }
     }
@@ -697,12 +708,24 @@ export class InfiniteOceanWorld {
     ];
   }
 
+  getSunDirection() {
+    const angle = this.timeOfDay * Math.PI * 2;
+    const x = Math.cos(angle) * 0.65;
+    const y = Math.max(0.1, Math.sin(angle)); // keep sun slightly above seabed horizon
+    const z = Math.sin(angle) * 0.3;
+    const len = Math.hypot(x, y, z) || 1;
+    return [x / len, y / len, z / len];
+  }
+
   // ----------------------------------------------------------------
   // Frame Update Loop
   // ----------------------------------------------------------------
   update(dt, playerFishPos) {
     // 1. Stream Infinite Chunks
     const newChunks = this.updateChunks(playerFishPos[0], playerFishPos[2]);
+
+    // Update day/night cycle
+    this.timeOfDay = (this.timeOfDay + dt * this.daySpeed) % 1.0;
 
     // 2. Update Fish Schools (Boids algorithm + Player avoidance!)
     for (const school of this.fishSchools) {

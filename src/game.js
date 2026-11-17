@@ -46,6 +46,10 @@ export class NyxenGame {
     // Notification toast timer
     this.toastTimer = 0;
 
+    // Photo Mode & Transitions
+    this.isPhotoMode = false;
+    this.switchFadeAlpha = 0.0;
+
     this.loadSavedProgress();
     this.bindEvents();
   }
@@ -179,6 +183,40 @@ export class NyxenGame {
       }
     };
 
+    // Photo Mode Toggle (P key)
+    this.input.onPhotoMode = () => {
+      this.isPhotoMode = !this.isPhotoMode;
+      const hud = document.querySelector('.hud-layer');
+      const mobile = document.querySelector('.mobile-controls');
+      const photoLabel = document.getElementById('photo-mode-label');
+
+      if (this.isPhotoMode) {
+        if (hud) hud.style.opacity = '0';
+        if (mobile) mobile.style.opacity = '0';
+        if (photoLabel) photoLabel.style.display = 'block';
+        this.showToast('📷 Photo Mode Enabled — Press P to capture snapshot', 2500);
+
+        // Capture snapshot after HUD hides
+        setTimeout(() => {
+          try {
+            const dataUrl = this.canvas.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.download = `nyxen-snapshot-${Date.now()}.png`;
+            link.href = dataUrl;
+            link.click();
+            this.showToast('📸 Photo saved to downloads!', 3000);
+          } catch (e) {
+            console.warn('Snapshot capture note:', e);
+          }
+        }, 120);
+      } else {
+        if (hud) hud.style.opacity = '1';
+        if (mobile) mobile.style.opacity = '1';
+        if (photoLabel) photoLabel.style.display = 'none';
+        this.showToast('Photo Mode Exited', 1500);
+      }
+    };
+
     // User first interaction starts Audio Context
     const resumeAudio = () => {
       this.audio.resume();
@@ -195,6 +233,7 @@ export class NyxenGame {
     if (!SPECIES_DATA[speciesId]) return;
     this.activeSpeciesId = speciesId;
     this.physics.setSpecies(speciesId);
+    this.switchFadeAlpha = 0.85; // Trigger smooth oceanic blue transition
     this.saveProgress();
 
     const spec = SPECIES_DATA[speciesId];
@@ -268,6 +307,17 @@ export class NyxenGame {
     // 4. Audio Simulation
     this.audio.update(dt, this.physics.currentSpeed, this.physics.position[1], this.physics.isBursting);
 
+    // Free GPU resources for any chunks evicted this frame (Memory leak prevention)
+    if (this.world.evictedChunks && this.world.evictedChunks.length > 0) {
+      for (const chunk of this.world.evictedChunks) {
+        this.renderer.freeChunkGPU(chunk);
+      }
+    }
+
+    // Dynamic Day/Night Cycle Sun Tracking
+    const sunDir = this.world.getSunDirection();
+    this.renderer.updateSunDirection(sunDir);
+
     // 5. Render Scene
     this.renderer.beginFrame(this.time, this.physics.camPos, this.physics.viewMatrix);
 
@@ -277,12 +327,14 @@ export class NyxenGame {
     // Render Set Pieces (Sunken ship, whale fluke, arch)
     this.renderer.renderSetPieces(this.setPiecesGPU);
 
-    // Gather active kelp and corals from active chunks
+    // Gather active kelp, corals, and bubble vents from active chunks
     const allKelp = [];
     const allCorals = [];
+    const allVents = [];
     for (const chunk of this.world.activeChunks.values()) {
       if (chunk.kelpInstances) allKelp.push(...chunk.kelpInstances);
       if (chunk.coralInstances) allCorals.push(...chunk.coralInstances);
+      if (chunk.bubbleVents) allVents.push(...chunk.bubbleVents);
     }
 
     // Render Kelp Forests
@@ -303,6 +355,11 @@ export class NyxenGame {
     // Render Manta Rays
     if (this.mantaGPU) {
       this.renderer.renderMantas(this.mantaGPU, this.world.mantaRays);
+    }
+
+    // Render Hydrothermal Chimney Bubble Vents
+    if (allVents.length > 0) {
+      this.renderer.renderBubbleVents(allVents);
     }
 
     // Render Collectible Luminous Pearls
@@ -327,6 +384,17 @@ export class NyxenGame {
 
     // Render Infinite Water Surface
     this.renderer.renderWaterSurface();
+
+    // Render Crystalline Marine Snow Particles
+    if (this.world.marineSnow) {
+      this.renderer.renderParticles(this.world.marineSnow);
+    }
+
+    // Render Smooth Species-Switch Oceanic Blue Fade Transition
+    if (this.switchFadeAlpha > 0.001) {
+      this.switchFadeAlpha = Math.max(0.0, this.switchFadeAlpha - dt * 2.8);
+      this.renderer.renderFade(this.switchFadeAlpha);
+    }
 
     // 6. Update HTML HUD Elements
     this.updateHUD();
@@ -362,7 +430,18 @@ export class NyxenGame {
     if (speedEl) speedEl.textContent = `${speedKnots} kts`;
 
     const staminaBar = document.getElementById('hud-stamina-bar');
-    if (staminaBar) staminaBar.style.width = `${staminaPct}%`;
+    if (staminaBar) {
+      staminaBar.style.width = `${staminaPct}%`;
+      staminaBar.classList.toggle('stamina-warn', staminaPct < 50 && staminaPct >= 20);
+      staminaBar.classList.toggle('stamina-crit', staminaPct < 20);
+    }
+
+    const timeEl = document.getElementById('hud-time');
+    if (timeEl) {
+      const isDay = this.world.timeOfDay > 0.18 && this.world.timeOfDay < 0.82;
+      timeEl.textContent = isDay ? '☀️ Day' : '🌙 Night';
+      timeEl.style.color = isDay ? '#fbbf24' : '#818cf8';
+    }
 
     const pearlsEl = document.getElementById('hud-pearls');
     if (pearlsEl) pearlsEl.textContent = `${this.totalPearlsCollected}`;

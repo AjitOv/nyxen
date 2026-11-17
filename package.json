@@ -1,0 +1,14 @@
+{
+  "name": "nyxen",
+  "version": "1.0.0",
+  "description": "NYXEN — Underwater Exploration & Fish Character Experience",
+  "type": "module",
+  "scripts": {
+    "start": "python3 -m http.server 8000",
+    "build": "node build.js",
+    "test": "node test.js"
+  },
+  "keywords": ["webgl2", "webgpu", "underwater", "fish", "procedural"],
+  "author": "NYXEN Contributors",
+  "license": "MIT"
+}

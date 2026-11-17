@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>NYXEN — Underwater Exploration & Fish Character Experience</title>
+  <style>
+    :root {
+      --cyan: #22d3ee;
+      --cyan-glow: rgba(34, 211, 238, 0.4);
+      --teal: #0d9488;
+      --deep-navy: #04121f;
+      --glass-bg: rgba(6, 24, 44, 0.72);
+      --glass-border: rgba(34, 211, 238, 0.25);
+      --gold: #fbbf24;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: var(--deep-navy);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      color: #e2e8f0;
+    }
+
+    #canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: crosshair;
+    }
+
+    /* ------------------------------------------------------------- */
+    /* HUD Overlays                                                  */
+    /* ------------------------------------------------------------- */
+    .hud-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 16px 20px;
+    }
+
+    .hud-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      pointer-events: auto;
+    }
+
+    .brand-box {
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      padding: 10px 16px;
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    }
+
+    .brand-title {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: 2.5px;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .brand-title span {
+      color: var(--cyan);
+      text-shadow: 0 0 12px var(--cyan-glow);
+    }
+
+    .species-badge {
+      font-size: 13px;
+      font-weight: 500;
+      color: #94a3b8;
+      margin-top: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .species-badge strong {
+      color: var(--gold);
+    }
+
+    .hud-top-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .glass-btn {
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      color: #cbd5e1;
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+      pointer-events: auto;
+    }
+
+    .glass-btn:hover {
+      background: rgba(13, 148, 136, 0.4);
+      border-color: var(--cyan);
+      color: #fff;
+      box-shadow: 0 0 12px var(--cyan-glow);
+    }
+
+    .fps-badge {
+      font-size: 11px;
+      color: #38bdf8;
+      background: rgba(2, 6, 23, 0.85);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-family: monospace;
+    }
+
+    /* ------------------------------------------------------------- */
+    /* Bottom Telemetry & Quick-Switch                               */
+    /* ------------------------------------------------------------- */
+    .hud-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 16px;
+      pointer-events: none;
+    }
+
+    .telemetry-card {
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      padding: 12px 18px;
+      border-radius: 12px;
+      min-width: 170px;
+      pointer-events: auto;
+    }
+
+    .telemetry-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+      font-size: 12px;
+    }
+
+    .telemetry-label {
+      color: #94a3b8;
+      font-size: 11px;
+      letter-spacing: 0.5px;
+    }
+
+    .telemetry-val {
+      font-family: monospace;
+      font-weight: 700;
+      font-size: 14px;
+      color: #38bdf8;
+    }
+
+    .stamina-track {
+      width: 100%;
+      height: 6px;
+      background: rgba(15, 23, 42, 0.8);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+
+    .stamina-fill {
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, #06b6d4, #22d3ee);
+      box-shadow: 0 0 8px #22d3ee;
+      transition: width 0.08s ease-out;
+    }
+
+    /* Fish Selector Bar */
+    .fish-selector-strip {
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      padding: 8px 12px;
+      border-radius: 14px;
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      max-width: calc(100vw - 440px);
+      pointer-events: auto;
+      scrollbar-width: none;
+    }
+    .fish-selector-strip::-webkit-scrollbar { display: none; }
+
+    .fish-selector-btn {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      color: #94a3b8;
+      padding: 6px 10px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+    }
+
+    .fish-selector-btn:hover {
+      background: rgba(13, 148, 136, 0.3);
+      border-color: var(--cyan);
+      color: #fff;
+    }
+
+    .fish-selector-btn.active {
+      background: rgba(6, 182, 212, 0.25);
+      border-color: var(--cyan);
+      color: #fff;
+      box-shadow: 0 0 10px var(--cyan-glow);
+    }
+
+    .fish-key-hint {
+      font-size: 9px;
+      color: #64748b;
+    }
+
+    /* ------------------------------------------------------------- */
+    /* Notification Toast                                            */
+    /* ------------------------------------------------------------- */
+    #notification-toast {
+      position: absolute;
+      top: 80px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-20px);
+      background: rgba(4, 30, 56, 0.88);
+      border: 1px solid var(--cyan);
+      color: #f8fafc;
+      padding: 12px 24px;
+      border-radius: 30px;
+      font-size: 14px;
+      font-weight: 600;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 20px var(--cyan-glow);
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 100;
+    }
+
+    #notification-toast.visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* ------------------------------------------------------------- */
+    /* Modals (Encyclopedia, Controls, Credits)                      */
+    /* ------------------------------------------------------------- */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(2, 6, 23, 0.78);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+      z-index: 200;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+
+    .modal-overlay.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .modal-content {
+      background: #091a2e;
+      border: 1px solid var(--glass-border);
+      border-radius: 16px;
+      width: 100%;
+      max-width: 780px;
+      max-height: 85vh;
+      overflow-y: auto;
+      padding: 24px 28px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+      position: relative;
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+      padding-bottom: 14px;
+      margin-bottom: 20px;
+    }
+
+    .modal-header h2 {
+      font-size: 20px;
+      font-weight: 700;
+      color: #f8fafc;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .close-btn {
+      background: none;
+      border: none;
+      color: #94a3b8;
+      font-size: 24px;
+      cursor: pointer;
+      line-height: 1;
+    }
+
+    .species-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 16px;
+    }
+
+    .species-card {
+      background: rgba(15, 34, 58, 0.7);
+      border: 1px solid rgba(56, 189, 248, 0.2);
+      border-radius: 12px;
+      padding: 16px;
+      transition: all 0.2s ease;
+    }
+
+    .species-card:hover {
+      border-color: var(--cyan);
+      box-shadow: 0 0 16px rgba(34, 211, 238, 0.2);
+    }
+
+    .species-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 4px;
+    }
+
+    .species-card-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #f1f5f9;
+    }
+
+    .species-card-latin {
+      font-size: 12px;
+      font-style: italic;
+      color: #38bdf8;
+    }
+
+    .species-card-meta {
+      font-size: 11px;
+      color: #94a3b8;
+      margin-bottom: 8px;
+    }
+
+    .species-card-desc {
+      font-size: 12px;
+      color: #cbd5e1;
+      line-height: 1.45;
+      margin-bottom: 12px;
+    }
+
+    .species-card-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      font-size: 11px;
+      color: #94a3b8;
+      background: rgba(4, 18, 31, 0.6);
+      padding: 8px;
+      border-radius: 6px;
+      margin-bottom: 12px;
+    }
+
+    .select-species-card-btn {
+      width: 100%;
+      background: linear-gradient(135deg, var(--teal), #0284c7);
+      border: none;
+      color: #fff;
+      font-weight: 600;
+      font-size: 12px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: filter 0.2s;
+    }
+
+    .select-species-card-btn:hover {
+      filter: brightness(1.2);
+    }
+
+    /* Mobile Controls Touch Buttons */
+    .mobile-controls {
+      display: none;
+      position: absolute;
+      bottom: 100px;
+      right: 20px;
+      pointer-events: auto;
+      flex-direction: column;
+      gap: 12px;
+      z-index: 50;
+    }
+
+    .mobile-btn {
+      width: 54px;
+      height: 54px;
+      border-radius: 50%;
+      background: rgba(14, 42, 71, 0.85);
+      border: 2px solid var(--cyan);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+    }
+
+    @media (max-width: 860px) {
+      .fish-selector-strip {
+        max-width: 100%;
+      }
+      .hud-footer {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .mobile-controls {
+        display: flex;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- WebGL2 / WebGPU Rendering Canvas -->
+  <canvas id="canvas"></canvas>
+
+  <!-- Notification Toast -->
+  <div id="notification-toast">✨ Welcome to NYXEN</div>
+
+  <!-- HUD Interface Layer -->
+  <div class="hud-layer">
+    <!-- Top Header -->
+    <header class="hud-header">
+      <div class="brand-box">
+        <div class="brand-title">NYX<span>EN</span></div>
+        <div class="species-badge">SPECIES: <strong id="hud-species-name">Ocellaris Clownfish</strong></div>
+      </div>
+
+      <div class="hud-top-right">
+        <div class="fps-badge" id="hud-fps">60 FPS</div>
+        <button class="glass-btn" id="sound-toggle" title="Toggle Sound (M)">🔊</button>
+        <button class="glass-btn" id="cam-toggle" title="Toggle Camera (V)"><span id="hud-cam-mode">CHASE CAM</span></button>
+        <button class="glass-btn" id="journal-btn" title="Species Encyclopedia & Journal (Tab)">📖 LOG</button>
+        <button class="glass-btn" id="help-btn" title="Controls & Info (?)">?</button>
+      </div>
+    </header>
+
+    <!-- Bottom Telemetry & Quick Selector -->
+    <footer class="hud-footer">
+      <!-- Fish Telemetry -->
+      <div class="telemetry-card">
+        <div class="telemetry-row">
+          <span class="telemetry-label">DEPTH</span>
+          <span class="telemetry-val" id="hud-depth">18.0m</span>
+        </div>
+        <div class="telemetry-row">
+          <span class="telemetry-label">SPEED</span>
+          <span class="telemetry-val" id="hud-speed">0.0 kts</span>
+        </div>
+        <div class="telemetry-row">
+          <span class="telemetry-label">PEARLS</span>
+          <span class="telemetry-val" id="hud-pearls">0/20</span>
+        </div>
+        <div class="stamina-track">
+          <div class="stamina-fill" id="hud-stamina-bar"></div>
+        </div>
+      </div>
+
+      <!-- Quick Species Selector Strip -->
+      <nav class="fish-selector-strip" aria-label="Playable Fish Species">
+        <button class="fish-selector-btn active" data-species="clownfish">
+          <span>Clownfish</span>
+          <span class="fish-key-hint">1</span>
+        </button>
+        <button class="fish-selector-btn" data-species="blue_tang">
+          <span>Blue Tang</span>
+          <span class="fish-key-hint">2</span>
+        </button>
+        <button class="fish-selector-btn" data-species="yellow_tang">
+          <span>Yellow Tang</span>
+          <span class="fish-key-hint">3</span>
+        </button>
+        <button class="fish-selector-btn" data-species="lionfish">
+          <span>Lionfish</span>
+          <span class="fish-key-hint">4</span>
+        </button>
+        <button class="fish-selector-btn" data-species="emperor_angelfish">
+          <span>Angelfish</span>
+          <span class="fish-key-hint">5</span>
+        </button>
+        <button class="fish-selector-btn" data-species="longnose_butterfly">
+          <span>Butterfly</span>
+          <span class="fish-key-hint">6</span>
+        </button>
+        <button class="fish-selector-btn" data-species="moorish_idol">
+          <span>Moorish Idol</span>
+          <span class="fish-key-hint">7</span>
+        </button>
+        <button class="fish-selector-btn" data-species="royal_gramma">
+          <span>Gramma</span>
+          <span class="fish-key-hint">8</span>
+        </button>
+      </nav>
+    </footer>
+  </div>
+
+  <!-- Mobile Touch On-Screen Buttons -->
+  <div class="mobile-controls">
+    <button class="mobile-btn" id="m-burst-btn">BURST</button>
+    <button class="mobile-btn" id="m-cam-btn">CAM</button>
+    <button class="mobile-btn" id="m-log-btn">LOG</button>
+  </div>
+
+  <!-- Species Encyclopedia & Discovery Modal -->
+  <div class="modal-overlay" id="journal-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>📖 Marine Logbook & Species Encyclopedia</h2>
+        <button class="close-btn" id="close-journal">&times;</button>
+      </div>
+
+      <div style="margin-bottom: 20px;">
+        <h3 style="font-size: 14px; color: var(--cyan); margin-bottom: 8px;">DISCOVERED LANDMARKS (CORAL EDEN)</h3>
+        <div id="landmarks-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px;">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+
+      <h3 style="font-size: 14px; color: var(--gold); margin-bottom: 12px;">PLAYABLE BIOLOGICAL FISH SPECIES</h3>
+      <div class="species-grid" id="species-grid">
+        <!-- Dynamically populated from SPECIES_DATA -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Controls & Info Modal -->
+  <div class="modal-overlay" id="help-modal">
+    <div class="modal-content" style="max-width: 580px;">
+      <div class="modal-header">
+        <h2>🎮 Controls & Technical Architecture</h2>
+        <button class="close-btn" id="close-help">&times;</button>
+      </div>
+
+      <div style="font-size: 13px; line-height: 1.6; color: #cbd5e1;">
+        <h3 style="color: var(--cyan); margin-bottom: 8px;">DESKTOP CONTROLS</h3>
+        <ul style="list-style-type: none; margin-bottom: 16px;">
+          <li>• <strong>Click Canvas</strong>: Lock mouse for smooth analog pitch/yaw look & steering</li>
+          <li>• <strong>W / S</strong>: Swim forward / reverse drag</li>
+          <li>• <strong>A / D</strong>: Strafe left / right with biological banking roll</li>
+          <li>• <strong>Space / E</strong>: Ascend towards the surface</li>
+          <li>• <strong>Q</strong>: Descend into the depths</li>
+          <li>• <strong>Shift</strong>: Burst swim (consumes stamina)</li>
+          <li>• <strong>V</strong>: Toggle First-Person Eye Cam / Third-Person Chase Cam</li>
+          <li>• <strong>1 - 8</strong>: Instant fish character quick-switch</li>
+          <li>• <strong>M</strong>: Toggle procedural Web Audio soundscape</li>
+          <li>• <strong>Tab / J</strong>: Open Marine Logbook & Encyclopedia</li>
+        </ul>
+
+        <h3 style="color: var(--cyan); margin-bottom: 8px;">TOUCH CONTROLS (MOBILE)</h3>
+        <ul style="list-style-type: none; margin-bottom: 16px;">
+          <li>• <strong>Left Screen Touch</strong>: Drag to swim forward/backward/strafe</li>
+          <li>• <strong>Right Screen Touch</strong>: Drag to steer pitch and yaw</li>
+          <li>• <strong>BURST Button</strong>: Speed boost sprint</li>
+        </ul>
+
+        <h3 style="color: var(--gold); margin-bottom: 8px;">TECHNICAL INTEGRATION ATTRIBUTION</h3>
+        <p style="font-size: 12px; color: #94a3b8;">
+          NYXEN is built using technical references, procedural noise, and lighting mathematics from Noniv's <em>Abyssal Garden</em> (MIT License).
+          Featuring 8 biologically distinct playable fish species with customized vertex wave kinematics, shared WebGPU/WebGL2 pipeline, and 100% procedural Web Audio synthesis.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modular Scripts -->
+  <script type="module">
+    import { NyxenGame } from './src/game.js';
+    import { SPECIES_DATA } from './src/species.js';
+    import { LANDMARKS } from './src/world.js';
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      const canvas = document.getElementById('canvas');
+      const game = new NyxenGame(canvas);
+      window.nyxen = game;
+
+      await game.start();
+
+      // UI Bindings
+      const journalModal = document.getElementById('journal-modal');
+      const helpModal = document.getElementById('help-modal');
+
+      const openJournal = () => {
+        populateJournal();
+        journalModal.classList.add('open');
+      };
+      const closeJournal = () => journalModal.classList.remove('open');
+
+      const openHelp = () => helpModal.classList.add('open');
+      const closeHelp = () => helpModal.classList.remove('open');
+
+      document.getElementById('journal-btn').addEventListener('click', openJournal);
+      document.getElementById('close-journal').addEventListener('click', closeJournal);
+      document.getElementById('help-btn').addEventListener('click', openHelp);
+      document.getElementById('close-help').addEventListener('click', closeHelp);
+      document.getElementById('m-log-btn').addEventListener('click', openJournal);
+
+      document.getElementById('cam-toggle').addEventListener('click', () => {
+        game.input.onToggleCamera();
+      });
+      document.getElementById('m-cam-btn').addEventListener('click', () => {
+        game.input.onToggleCamera();
+      });
+
+      document.getElementById('sound-toggle').addEventListener('click', () => {
+        game.input.onToggleMute();
+      });
+
+      // Mobile burst touch
+      const mBurst = document.getElementById('m-burst-btn');
+      mBurst.addEventListener('touchstart', (e) => { e.preventDefault(); game.input.input.sprint = true; });
+      mBurst.addEventListener('touchend', (e) => { e.preventDefault(); game.input.input.sprint = false; });
+
+      // Quick Switch Strip
+      document.querySelectorAll('.fish-selector-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          game.selectSpecies(btn.dataset.species);
+        });
+      });
+
+      function populateJournal() {
+        // Landmarks
+        const lmList = document.getElementById('landmarks-list');
+        lmList.innerHTML = '';
+        for (const lm of game.world.landmarks) {
+          const div = document.createElement('div');
+          div.style.padding = '8px 12px';
+          div.style.background = lm.discovered ? 'rgba(6, 182, 212, 0.15)' : 'rgba(15, 23, 42, 0.6)';
+          div.style.border = lm.discovered ? '1px solid var(--cyan)' : '1px solid rgba(148, 163, 184, 0.2)';
+          div.style.borderRadius = '8px';
+          div.style.fontSize = '12px';
+          div.innerHTML = `
+            <div style="font-weight: 700; color: ${lm.discovered ? '#38bdf8' : '#64748b'};">${lm.discovered ? '✓ ' + lm.name : '??? Undiscovered Location'}</div>
+            <div style="font-size: 11px; color: #94a3b8; margin-top: 3px;">${lm.discovered ? lm.desc : 'Explore Coral Eden to reveal this landmark.'}</div>
+          `;
+          lmList.appendChild(div);
+        }
+
+        // Species Cards
+        const grid = document.getElementById('species-grid');
+        grid.innerHTML = '';
+        for (const [key, spec] of Object.entries(SPECIES_DATA)) {
+          const card = document.createElement('div');
+          card.className = 'species-card';
+          card.innerHTML = `
+            <div class="species-card-header">
+              <span class="species-card-title">${spec.name}</span>
+              <span class="species-card-latin">${spec.scientificName}</span>
+            </div>
+            <div class="species-card-meta">Family: ${spec.family} • Size: ${spec.lengthCm} cm</div>
+            <div class="species-card-desc">${spec.description}</div>
+            <div class="species-card-stats">
+              <div><strong>Style:</strong> ${spec.swimmingStyle}</div>
+              <div><strong>Top Speed:</strong> ${(spec.burstSpeed * 1.94).toFixed(0)} kts</div>
+              <div><strong>Turn Agility:</strong> ${(spec.turnRate * 10).toFixed(0)}/40</div>
+              <div><strong>Habitat:</strong> ${spec.habitat}</div>
+            </div>
+            <button class="select-species-card-btn" data-spec="${spec.id}">
+              ${game.activeSpeciesId === spec.id ? 'Currently Swimming' : 'Swim as this Fish'}
+            </button>
+          `;
+          grid.appendChild(card);
+        }
+
+        document.querySelectorAll('.select-species-card-btn').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            const sid = e.target.dataset.spec;
+            game.selectSpecies(sid);
+            closeJournal();
+          });
+        });
+      }
+    });
+  </script>
+</body>
+</html>

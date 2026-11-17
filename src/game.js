@@ -6,11 +6,11 @@
 
 import { SharedRenderer } from './renderer.js';
 import { FishPhysics, CAMERA_MODES } from './fish_physics.js';
-import { CoralEdenWorld, LANDMARKS } from './world.js';
+import { InfiniteOceanWorld, CORE_LANDMARKS } from './world.js';
 import { SPECIES, SPECIES_DATA, buildFishMesh } from './species.js';
 import { MarineAudio } from './audio.js';
 import { InputManager } from './controls.js';
-import { clamp, floor } from './math.js';
+import { clamp, floor, atan2, PI } from './math.js';
 
 export class NyxenGame {
   constructor(canvas) {
@@ -20,14 +20,13 @@ export class NyxenGame {
     // Core Systems
     this.renderer = new SharedRenderer(canvas, { quality: this.quality });
     this.physics = new FishPhysics(SPECIES.CLOWNFISH);
-    this.world = new CoralEdenWorld(this.quality);
+    this.world = new InfiniteOceanWorld(this.quality);
     this.audio = new MarineAudio();
     this.input = new InputManager(canvas);
 
     // GPU Meshes Cache for all 8 Species
     this.speciesGPU = {};
     this.setPiecesGPU = [];
-    this.terrainGPU = null;
     this.coralMeshesGPU = {};
     this.kelpGPU = null;
     this.mantaGPU = null;
@@ -118,10 +117,7 @@ export class NyxenGame {
   async start() {
     await this.renderer.init();
 
-    // 1. Upload Terrain
-    this.terrainGPU = this.renderer.uploadMesh(this.world.terrainMesh);
-
-    // 2. Upload Set Pieces
+    // 1. Upload Set Pieces
     for (const piece of this.world.setPieceMeshes) {
       this.setPiecesGPU.push({
         gpu: this.renderer.uploadMesh(piece.mesh),
@@ -275,20 +271,28 @@ export class NyxenGame {
     // 5. Render Scene
     this.renderer.beginFrame(this.time, this.physics.camPos, this.physics.viewMatrix);
 
-    // Render Terrain
-    this.renderer.renderTerrain(this.terrainGPU);
+    // Render Infinite Streaming Terrain Chunks
+    this.renderer.renderTerrainChunks(this.world.activeChunks);
 
     // Render Set Pieces (Sunken ship, whale fluke, arch)
     this.renderer.renderSetPieces(this.setPiecesGPU);
 
+    // Gather active kelp and corals from active chunks
+    const allKelp = [];
+    const allCorals = [];
+    for (const chunk of this.world.activeChunks.values()) {
+      if (chunk.kelpInstances) allKelp.push(...chunk.kelpInstances);
+      if (chunk.coralInstances) allCorals.push(...chunk.coralInstances);
+    }
+
     // Render Kelp Forests
-    if (this.kelpGPU) {
-      this.renderer.renderKelpForest(this.kelpGPU, this.world.kelpInstances);
+    if (this.kelpGPU && allKelp.length > 0) {
+      this.renderer.renderKelpForest(this.kelpGPU, allKelp);
     }
 
     // Render Coral Gardens & Sponges
-    if (this.coralMeshesGPU.staghorn) {
-      this.renderer.renderCoralGardens(this.coralMeshesGPU, this.world.coralInstances);
+    if (this.coralMeshesGPU.staghorn && allCorals.length > 0) {
+      this.renderer.renderCoralGardens(this.coralMeshesGPU, allCorals);
     }
 
     // Render Schooling Fish Boids
@@ -309,7 +313,6 @@ export class NyxenGame {
     // Render Player Fish (in chase cam or first person snout view)
     const activeMesh = this.speciesGPU[this.activeSpeciesId];
     if (activeMesh) {
-      // In first person view, fish is slightly offset forward so snout/fins scull in lower view
       this.renderer.renderFish(
         activeMesh,
         this.physics.position,
@@ -322,7 +325,7 @@ export class NyxenGame {
       );
     }
 
-    // Render Water Surface
+    // Render Infinite Water Surface
     this.renderer.renderWaterSurface();
 
     // 6. Update HTML HUD Elements
@@ -332,9 +335,25 @@ export class NyxenGame {
   }
 
   updateHUD() {
+    const posX = Math.round(this.physics.position[0]);
+    const posZ = Math.round(this.physics.position[2]);
     const depth = Math.max(0, -this.physics.position[1]).toFixed(1);
     const speedKnots = (this.physics.currentSpeed * 1.94384).toFixed(1);
     const staminaPct = Math.round(this.physics.stamina * 100);
+
+    // Current Biome
+    const biome = this.world.getBiomeAt(this.physics.position[0], this.physics.position[2]);
+
+    // Compass calculation
+    const headingDeg = Math.round((atan2(this.physics.forward[0], this.physics.forward[2]) * 180 / PI + 360) % 360);
+    const compassDirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+    const compassStr = compassDirs[Math.floor(((headingDeg + 22.5) % 360) / 45)];
+
+    const coordsEl = document.getElementById('hud-coords');
+    if (coordsEl) coordsEl.textContent = `X: ${posX > 0 ? '+' : ''}${posX}m, Z: ${posZ > 0 ? '+' : ''}${posZ}m [${compassStr} ${headingDeg}°]`;
+
+    const biomeEl = document.getElementById('hud-biome-name');
+    if (biomeEl) biomeEl.textContent = biome.name;
 
     const depthEl = document.getElementById('hud-depth');
     if (depthEl) depthEl.textContent = `${depth}m`;
@@ -346,7 +365,7 @@ export class NyxenGame {
     if (staminaBar) staminaBar.style.width = `${staminaPct}%`;
 
     const pearlsEl = document.getElementById('hud-pearls');
-    if (pearlsEl) pearlsEl.textContent = `${this.totalPearlsCollected}/20`;
+    if (pearlsEl) pearlsEl.textContent = `${this.totalPearlsCollected}`;
 
     const camBadge = document.getElementById('hud-cam-mode');
     if (camBadge) camBadge.textContent = this.physics.cameraMode === CAMERA_MODES.FIRST_PERSON ? 'FIRST PERSON' : 'CHASE CAM';

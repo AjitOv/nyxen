@@ -142,7 +142,7 @@ export class SharedRenderer {
       'uModel', 'uTailPhase', 'uTailAmp', 'uPectoralPhase', 'uIsPlayer'
     ]);
     this.uWaterSurface = this.getUniformLocations(this.programWaterSurface, [
-      'uViewProj', 'uCamPos', 'uSunDir', 'uSunCol', 'uWaterCol', 'uTime'
+      'uViewProj', 'uCamPos', 'uSunDir', 'uSunCol', 'uWaterCol', 'uTime', 'uModel'
     ]);
     this.uParticles = this.getUniformLocations(this.programParticles, [
       'uViewProj', 'uCamPos', 'uTime', 'uWaterCol'
@@ -284,6 +284,7 @@ export class SharedRenderer {
   }
 
   renderTerrain(terrainGPU) {
+    if (!terrainGPU) return;
     const gl = this.gl;
     gl.useProgram(this.programSolid);
 
@@ -294,12 +295,36 @@ export class SharedRenderer {
     gl.uniform3fv(this.uSolid.uWaterCol, this.waterColor);
     gl.uniform1f(this.uSolid.uTime, this.time);
 
-    // Identity model matrix for terrain
     const m = Mat4.create();
     gl.uniformMatrix4fv(this.uSolid.uModel, false, m);
 
     gl.bindVertexArray(terrainGPU.vao);
     gl.drawElements(gl.TRIANGLES, terrainGPU.indexCount, terrainGPU.indexType, 0);
+    gl.bindVertexArray(null);
+  }
+
+  // Infinite Streaming Chunks Rendering
+  renderTerrainChunks(chunksMap) {
+    const gl = this.gl;
+    gl.useProgram(this.programSolid);
+
+    gl.uniformMatrix4fv(this.uSolid.uViewProj, false, this.viewProjMatrix);
+    gl.uniform3fv(this.uSolid.uCamPos, this.camPos);
+    gl.uniform3fv(this.uSolid.uSunDir, this.sunDir);
+    gl.uniform3fv(this.uSolid.uSunCol, this.sunColor);
+    gl.uniform3fv(this.uSolid.uWaterCol, this.waterColor);
+    gl.uniform1f(this.uSolid.uTime, this.time);
+
+    const m = Mat4.create();
+    gl.uniformMatrix4fv(this.uSolid.uModel, false, m);
+
+    for (const chunk of chunksMap.values()) {
+      if (!chunk.gpu) {
+        chunk.gpu = this.uploadMesh(chunk.meshData);
+      }
+      gl.bindVertexArray(chunk.gpu.vao);
+      gl.drawElements(gl.TRIANGLES, chunk.gpu.indexCount, chunk.gpu.indexType, 0);
+    }
     gl.bindVertexArray(null);
   }
 
@@ -385,6 +410,12 @@ export class SharedRenderer {
     gl.uniform3fv(this.uWaterSurface.uSunCol, this.sunColor);
     gl.uniform3fv(this.uWaterSurface.uWaterCol, this.waterColor);
     gl.uniform1f(this.uWaterSurface.uTime, this.time);
+
+    // Follow camera position in X and Z so ocean surface is infinite
+    const m = Mat4.create();
+    m[12] = this.camPos[0];
+    m[14] = this.camPos[2];
+    gl.uniformMatrix4fv(this.uWaterSurface.uModel, false, m);
 
     // Disable culling for water surface so it is visible from below & above
     gl.disable(gl.CULL_FACE);
@@ -760,20 +791,20 @@ const VS_WATER_SURFACE = `#version 300 es
 layout(location = 0) in vec3 aPos;
 
 uniform mat4 uViewProj;
+uniform mat4 uModel;
 uniform float uTime;
 
 out vec3 vWorldPos;
 out vec2 vUV;
 
 void main() {
-  vec3 pos = aPos;
-  // Gentle ocean wave undulation
-  float wave = sin(uTime * 1.4 + pos.x * 0.08) * cos(uTime * 1.1 + pos.z * 0.07) * 0.35;
-  pos.y += wave;
+  vec4 wp = uModel * vec4(aPos, 1.0);
+  float wave = sin(uTime * 1.4 + wp.x * 0.08) * cos(uTime * 1.1 + wp.z * 0.07) * 0.35;
+  wp.y += wave;
 
-  vWorldPos = pos;
-  vUV = pos.xz * 0.04;
-  gl_Position = uViewProj * vec4(pos, 1.0);
+  vWorldPos = wp.xyz;
+  vUV = wp.xz * 0.04;
+  gl_Position = uViewProj * wp;
 }
 `;
 
@@ -820,6 +851,11 @@ out float vAlpha;
 
 void main() {
   vec3 pos = aParticle.xyz;
+
+  // Infinite wrapping around camera within 120m bounds
+  pos.x = mod(pos.x - uCamPos.x + 60.0, 120.0) - 60.0 + uCamPos.x;
+  pos.z = mod(pos.z - uCamPos.z + 60.0, 120.0) - 60.0 + uCamPos.z;
+
   // Drifting motion in current
   pos.x += sin(uTime * 0.4 + pos.y * 0.2) * 1.2;
   pos.z += cos(uTime * 0.3 + pos.x * 0.2) * 1.2;

@@ -33,10 +33,10 @@ export class SharedRenderer {
     this.sunDir = this.sunDir.map(v => v / sLen);
 
     // Spectral absorption coefficients (Red, Green, Blue)
-    // Red absorbs in <10m, Green in <30m, Blue penetrates deep
-    this.sigma = [0.058, 0.0235, 0.0195];
-    this.kd = [0.056, 0.0245, 0.0170];
-    this.waterColor = [0.12, 0.52, 0.82]; // Pure tropical blue-cyan
+    // Red absorbs in <8m, Green in <25m, Blue penetrates deep (>60m)
+    this.sigma = [0.092, 0.026, 0.009];
+    this.kd = [0.090, 0.025, 0.008];
+    this.waterColor = [0.03, 0.48, 0.98]; // Super Real Crystalline Oceanic Blue
     this.sunColor = [1.6, 1.5, 1.35];
 
     this.time = 0;
@@ -272,12 +272,13 @@ export class SharedRenderer {
     Mat4.multiply(this.viewProjMatrix, this.projMatrix, viewMatrix);
 
     const gl = this.gl;
-    // Deep atmospheric ocean background clear color
-    // Computed based on camera depth
-    const depthFactor = clamp((-camPos[1]) / 40.0, 0.0, 1.0);
-    const bgR = 0.08 * (1.0 - depthFactor * 0.7);
-    const bgG = 0.38 * (1.0 - depthFactor * 0.6);
-    const bgB = 0.65 * (1.0 - depthFactor * 0.5);
+    // Super Real Blue Ocean clear color
+    // Near surface: Vibrant tropical azure blue (0.015, 0.40, 0.98)
+    // At depth (45m): Deep majestic cobalt/indigo abyss (0.004, 0.14, 0.52)
+    const depthFactor = clamp((-camPos[1]) / 45.0, 0.0, 1.0);
+    const bgR = 0.015 * (1.0 - depthFactor * 0.7);
+    const bgG = 0.36 * (1.0 - depthFactor * 0.72) + 0.04;
+    const bgB = 0.92 * (1.0 - depthFactor * 0.50) + 0.06;
 
     gl.clearColor(bgR, bgG, bgB, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -622,32 +623,40 @@ void main() {
 
   // Diffuse sun lighting
   float NdotL = max(dot(N, L), 0.0);
-  float wrapNdotL = max(dot(N, L) * 0.5 + 0.5, 0.0);
 
-  // Dynamic Caustics dancing on upward faces
+  // Dynamic Caustics dancing on upward faces with crystalline blue chromatic fringes
   float caus = 0.0;
-  if (N.y > 0.1) {
-    caus = caustics(vWorldPos.xz * 0.12, uTime * 0.65) * N.y;
-    // Caustics fade with depth
-    caus *= exp(vWorldPos.y * 0.045);
+  if (N.y > 0.05) {
+    caus = caustics(vWorldPos.xz * 0.12, uTime * 0.65) * max(N.y, 0.0);
+    caus *= exp(vWorldPos.y * 0.042);
   }
+  vec3 causticLight = vec3(caus * 0.65, caus * 0.95, caus * 1.35);
 
-  // Underwater ambient light
-  vec3 ambient = uWaterCol * 0.45 * (N.y * 0.5 + 0.5) * exp(vWorldPos.y * 0.035);
-  vec3 sunLight = uSunCol * (NdotL + caus * 0.8) * exp(vWorldPos.y * 0.04);
+  // Depth-dependent Super Real Oceanic Blue gradient
+  float depthNorm = clamp(-vWorldPos.y / 50.0, 0.0, 1.0);
+  vec3 surfaceBlue = vec3(0.03, 0.52, 0.98); // Electric tropical azure
+  vec3 midBlue     = vec3(0.015, 0.28, 0.88); // Cobalt sapphire
+  vec3 abyssalBlue = vec3(0.006, 0.09, 0.48); // Deep ultramarine abyss
+  vec3 oceanWaterCol = mix(mix(surfaceBlue, midBlue, smoothstep(0.0, 0.45, depthNorm)), abyssalBlue, smoothstep(0.45, 1.0, depthNorm));
 
-  vec3 litColor = vColor.rgb * (ambient + sunLight * 0.65);
+  // Underwater ambient light bathed in rich blue
+  vec3 ambient = oceanWaterCol * (0.35 + 0.35 * (N.y * 0.5 + 0.5)) * exp(vWorldPos.y * 0.032);
+  vec3 sunLight = uSunCol * (NdotL * 0.75 + causticLight) * exp(vWorldPos.y * 0.038);
 
-  // Specular sheen
+  vec3 litColor = vColor.rgb * (ambient + sunLight * 0.7);
+
+  // Specular sheen with aquatic blue tint
   vec3 H = normalize(L + V);
-  float spec = pow(max(dot(N, H), 0.0), 32.0) * (caus * 0.5 + 0.2);
-  litColor += uSunCol * spec * 0.35;
+  float spec = pow(max(dot(N, H), 0.0), 32.0) * (caus * 0.6 + 0.2);
+  litColor += mix(uSunCol, vec3(0.3, 0.8, 1.0), 0.5) * spec * 0.4;
 
-  // Beer-Lambert Spectral Absorption Fog
-  // Red photons absorb fastest (0.056), green (0.024), blue penetrates deepest (0.017)
-  vec3 decay = exp(-vec3(0.056, 0.0245, 0.0170) * dist);
-  vec3 depthWaterCol = uWaterCol * (0.35 + 0.65 * exp(vWorldPos.y * 0.03));
-  vec3 finalColor = mix(depthWaterCol, litColor, decay);
+  // Volumetric forward scattering (sun shafts in blue water)
+  float sunScatter = pow(max(dot(V, L), 0.0), 3.0) * 0.35 * exp(vWorldPos.y * 0.035);
+  vec3 sunShaftGlow = vec3(0.15, 0.65, 1.0) * sunScatter;
+
+  // Beer-Lambert Spectral Absorption: Red absorbed in <8m, Green in <25m, Blue penetrates to 60m
+  vec3 decay = exp(-vec3(0.092, 0.026, 0.009) * dist);
+  vec3 finalColor = mix(oceanWaterCol, litColor, decay) + sunShaftGlow * (1.0 - decay.b);
 
   fragColor = vec4(finalColor, 1.0);
 }
@@ -765,23 +774,29 @@ void main() {
 
   float NdotL = max(dot(N, L), 0.0);
   float caus = 0.0;
-  if (N.y > 0.15) {
-    caus = caustics(vWorldPos.xz * 0.15, uTime * 0.65) * N.y * exp(vWorldPos.y * 0.04);
+  if (N.y > 0.08) {
+    caus = caustics(vWorldPos.xz * 0.15, uTime * 0.65) * max(N.y, 0.0) * exp(vWorldPos.y * 0.04);
   }
+  vec3 causticLight = vec3(caus * 0.65, caus * 0.95, caus * 1.35);
 
-  vec3 ambient = uWaterCol * 0.5 * (N.y * 0.5 + 0.5);
-  vec3 sunLight = uSunCol * (NdotL + caus * 0.7);
+  float depthNorm = clamp(-vWorldPos.y / 50.0, 0.0, 1.0);
+  vec3 surfaceBlue = vec3(0.03, 0.52, 0.98);
+  vec3 midBlue     = vec3(0.015, 0.28, 0.88);
+  vec3 abyssalBlue = vec3(0.006, 0.09, 0.48);
+  vec3 oceanWaterCol = mix(mix(surfaceBlue, midBlue, smoothstep(0.0, 0.45, depthNorm)), abyssalBlue, smoothstep(0.45, 1.0, depthNorm));
 
-  // Fish iridescent scale sheen
-  float fresnel = pow(1.0 - max(dot(N, V), 0.0), 3.0);
-  vec3 sheen = vec3(0.3, 0.7, 0.9) * fresnel * 0.45;
+  vec3 ambient = oceanWaterCol * (0.35 + 0.35 * (N.y * 0.5 + 0.5)) * exp(vWorldPos.y * 0.032);
+  vec3 sunLight = uSunCol * (NdotL * 0.75 + causticLight);
+
+  // Fish iridescent biological scales catching electric blue marine light
+  float fresnel = pow(1.0 - max(dot(N, V), 0.0), 2.8);
+  vec3 sheen = vec3(0.15, 0.65, 0.98) * fresnel * 0.6;
 
   vec3 litColor = vColor.rgb * (ambient + sunLight * 0.75) + sheen;
 
   // Beer-Lambert decay
-  vec3 decay = exp(-vec3(0.056, 0.0245, 0.0170) * dist);
-  vec3 depthWaterCol = uWaterCol * (0.35 + 0.65 * exp(vWorldPos.y * 0.03));
-  vec3 finalColor = mix(depthWaterCol, litColor, decay);
+  vec3 decay = exp(-vec3(0.092, 0.026, 0.009) * dist);
+  vec3 finalColor = mix(oceanWaterCol, litColor, decay);
 
   fragColor = vec4(finalColor, vColor.a);
 }
@@ -825,18 +840,32 @@ out vec4 fragColor;
 void main() {
   vec3 V = normalize(uCamPos - vWorldPos);
   vec3 L = normalize(uSunDir);
-  vec3 N = vec3(0.0, -1.0, 0.0); // Looking up at surface from below
 
-  // Surface reflection & refraction
-  float NdotV = max(dot(-N, V), 0.0);
-  float fresnel = 0.04 + 0.96 * pow(1.0 - NdotV, 4.0);
+  // Animated wave surface normal with multiple interfering ripples
+  vec2 uv = vWorldPos.xz * 0.12;
+  float w1 = sin(uv.x * 2.2 + uTime * 1.6) * cos(uv.y * 1.9 + uTime * 1.3);
+  float w2 = sin(uv.x * 4.8 - uTime * 2.2) * cos(uv.y * 4.2 + uTime * 1.8);
+  vec3 waveN = normalize(vec3(-w1 * 0.12 - w2 * 0.06, -1.0, -w1 * 0.12 + w2 * 0.06));
 
-  // Sun disc shimmer
+  float NdotV = max(dot(-waveN, V), 0.0);
+
+  // Snell's Window Critical Angle (~48.6 deg):
+  // Inside the window (NdotV > 0.65), view looks into bright radiant celestial azure sky.
+  // Outside the window, total internal reflection mirrors the deep cobalt blue ocean floor!
+  float snellWindow = smoothstep(0.55, 0.75, NdotV);
+
+  // Specular sun glints on wave facets
   vec3 H = normalize(L + V);
-  float sunShimmer = pow(max(dot(-N, H), 0.0), 64.0) * 2.5;
+  float sunGlint = pow(max(dot(-waveN, H), 0.0), 96.0) * 3.5;
 
-  vec3 surfaceColor = mix(uWaterCol * 1.2, uSunCol, fresnel + sunShimmer);
-  fragColor = vec4(surfaceColor, 0.75);
+  // Real oceanic surface colors
+  vec3 skyAzure = vec3(0.08, 0.62, 0.98); // Brilliant tropical sky-water
+  vec3 oceanMirror = vec3(0.012, 0.22, 0.72); // Total internal reflection deep blue
+
+  vec3 surfaceColor = mix(oceanMirror, skyAzure, snellWindow);
+  surfaceColor += uSunCol * sunGlint;
+
+  fragColor = vec4(surfaceColor, 0.85);
 }
 `;
 
@@ -880,6 +909,8 @@ out vec4 fragColor;
 void main() {
   vec2 coord = gl_PointCoord - vec2(0.5);
   if (length(coord) > 0.5) discard;
-  fragColor = vec4(mix(vec3(0.9, 0.95, 1.0), uWaterCol, 0.3), vAlpha);
+  // Sparkling crystalline blue marine snow
+  vec3 snowCol = mix(vec3(0.85, 0.95, 1.0), vec3(0.12, 0.68, 0.98), 0.45);
+  fragColor = vec4(snowCol, vAlpha);
 }
 `;

@@ -4,7 +4,7 @@
 // coral reef gardens, shipwreck fields, procedural landmarks, boid schools & mantas.
 // ============================================================================
 
-import { Mesh, vnoise, fbm, worley, sstep, rnd, rseed, rr, clamp, sin, cos, abs, max, min, sqrt, PI, TAU, hypot, ihash } from './math.js';
+import { Mesh, vnoise, fbm, worley, sstep, rnd, rseed, rr, clamp, sin, cos, abs, max, min, sqrt, pow, PI, TAU, hypot, ihash } from './math.js';
 
 export const CHUNK_SIZE = 64.0;
 

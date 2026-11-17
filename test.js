@@ -37,6 +37,27 @@ async function run() {
   console.log(`  - Total landmarks discovered/registered: ${world.landmarks.length}`);
   console.log(`  - Collectibles generated: ${world.collectibles.length}`);
 
+  // Test all procedural environmental and entity meshes
+  console.log('Testing procedural environmental meshes...');
+  const mantaMesh = world.buildMantaMesh();
+  console.log(`  - manta: ${mantaMesh.vertexCount} verts`);
+  const schoolFishMesh = world.buildSchoolFishMesh();
+  console.log(`  - schoolFish: ${schoolFishMesh.vertexCount} verts`);
+  const pearlMesh = world.buildPearlMesh();
+  console.log(`  - pearl: ${pearlMesh.vertexCount} verts`);
+  const kelpMesh = world.buildKelpColumnMesh();
+  console.log(`  - kelpColumn: ${kelpMesh.vertexCount} verts`);
+  const staghornMesh = world.buildStaghornMesh();
+  console.log(`  - staghorn: ${staghornMesh.vertexCount} verts`);
+  const brainMesh = world.buildBrainCoralMesh();
+  console.log(`  - brainCoral: ${brainMesh.vertexCount} verts`);
+  const tableMesh = world.buildTableCoralMesh();
+  console.log(`  - tableCoral: ${tableMesh.vertexCount} verts`);
+  const seaFanMesh = world.buildSeaFanMesh();
+  console.log(`  - seaFan: ${seaFanMesh.vertexCount} verts`);
+  const anemoneMesh = world.buildAnemoneMesh();
+  console.log(`  - anemone: ${anemoneMesh.vertexCount} verts`);
+
   const f = await import('./src/fish_physics.js');
   console.log('✓ fish_physics.js loaded');
   const phys = new f.FishPhysics();

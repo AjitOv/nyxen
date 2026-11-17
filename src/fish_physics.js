@@ -181,11 +181,31 @@ export class FishPhysics {
     this.position[2] += this.velocity[2] * dt;
 
     // 4. Biological Kinematics: Spine Undulation & Pectoral Sculling
-    const swimActivity = max(0.2, this.currentSpeed / spec.speed);
-    this.tailFrequency = 3.5 + swimActivity * 6.5; // Faster tail beat at higher speed
+    const isActivelySwimming = (input.forward || input.backward || input.strafeLeft || input.strafeRight || input.ascend || input.descend);
+    const speedRatio = clamp(this.currentSpeed / (spec.speed + 0.01), 0.0, 2.0);
+
+    // Dynamic tail beat frequency matching locomotive demand
+    const baseFreq = spec.tailFreq || 3.5;
+    this.tailFrequency = isActivelySwimming
+      ? baseFreq * (0.8 + speedRatio * 0.85)
+      : baseFreq * 0.4; // Relaxed idle undulation
+
     this.tailPhase += this.tailFrequency * dt;
-    this.tailAmplitude = clamp(0.12 + swimActivity * 0.28, 0.1, 0.45);
-    this.pectoralPhase += (4.0 + swimActivity * 8.0) * dt;
+
+    // Tail amplitude dynamically expands on active strokes and eases down to a glide
+    const maxAmp = this.isBursting ? 0.38 : (spec.tailAmp || 0.22) * (0.65 + speedRatio * 0.65);
+    const targetAmp = isActivelySwimming ? maxAmp : 0.032;
+    this.tailAmplitude += (targetAmp - this.tailAmplitude) * min(1.0, dt * 5.5);
+
+    // Pectoral fin sculling rate (vigorous rowing during turns/thrust, gentle hover when idle)
+    const pectRate = isActivelySwimming ? (5.0 + speedRatio * 7.5) : 2.5;
+    this.pectoralPhase += pectRate * dt;
+
+    // Subtle breathing / buoyancy hover bob when drifting
+    this.idlePhase = (this.idlePhase || 0) + dt * 1.8;
+    if (!isActivelySwimming && this.currentSpeed < 1.0) {
+      this.position[1] += sin(this.idlePhase) * 0.005;
+    }
 
     // 5. Environmental Collisions (Surface & Seabed)
     // Surface ceiling

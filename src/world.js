@@ -623,20 +623,54 @@ export class InfiniteOceanWorld {
   buildMantaMesh() {
     const mesh = new Mesh();
     const wingspan = 4.8, bodyLen = 3.6;
-    const vNose = mesh.vertex(0, 0.05, bodyLen * 0.5, 0, 1, 0, 0.5, 1, 0.12, 0.15, 0.18, 1);
-    const vTail = mesh.vertex(0, 0.0, -bodyLen * 0.5, 0, 0, -1, 0.5, 0, 0.12, 0.15, 0.18, 1);
-    const vLeftWing = mesh.vertex(-wingspan * 0.5, 0.1, 0.0, 0, 1, 0, 0, 0.5, 0.08, 0.10, 0.14, 1);
-    const vRightWing = mesh.vertex(wingspan * 0.5, 0.1, 0.0, 0, 1, 0, 1, 0.5, 0.08, 0.10, 0.14, 1);
-    const vBelly = mesh.vertex(0, -0.25, 0.1, 0, -1, 0, 0.5, 0.5, 0.95, 0.95, 0.98, 1);
+    const dorsalCol = [0.11, 0.14, 0.18, 1.0];
+    const ventralCol = [0.94, 0.94, 0.96, 1.0];
 
-    mesh.tri(vNose, vRightWing, vTail);
-    mesh.tri(vNose, vTail, vLeftWing);
-    mesh.tri(vNose, vBelly, vRightWing);
-    mesh.tri(vNose, vLeftWing, vBelly);
-    mesh.tri(vTail, vRightWing, vBelly);
-    mesh.tri(vTail, vBelly, vLeftWing);
+    // Subdivided winged disc: 12 slices along wingspan, 6 slices along length
+    // Allows fluid vertex shader biomechanical wing flapping
+    const xSlices = 12;
+    const zSlices = 6;
+    const topGrid = [];
+    const botGrid = [];
 
-    mesh.tube([[0, 0, -bodyLen * 0.5], [0, 0.05, -bodyLen * 0.8], [0, 0.1, -bodyLen * 1.2]], 0.05, 4, true, true, () => [0.1, 0.1, 0.12, 1.0]);
+    for (let i = 0; i <= xSlices; i++) {
+      const u = i / xSlices;
+      const x = (u - 0.5) * wingspan;
+      const spanNorm = abs(u - 0.5) * 2.0; // 0 at center, 1 at wingtips
+      const topRow = [];
+      const botRow = [];
+
+      for (let j = 0; j <= zSlices; j++) {
+        const v = j / zSlices;
+        const halfChordFront = (bodyLen * 0.5) * (1.0 - spanNorm * 0.92);
+        const halfChordRear = (-bodyLen * 0.5) * (1.0 - pow(spanNorm, 0.72) * 0.92);
+        const z = halfChordRear + (halfChordFront - halfChordRear) * v;
+
+        const thick = (1.0 - spanNorm * 0.88) * sin(v * PI) * 0.18;
+        const yTop = thick * 0.6;
+        const yBot = -thick * 0.6;
+
+        topRow.push(mesh.vertex(x, yTop, z, 0, 1, 0, u, v, dorsalCol[0], dorsalCol[1], dorsalCol[2], 1.0));
+        botRow.push(mesh.vertex(x, yBot, z, 0, -1, 0, u, v, ventralCol[0], ventralCol[1], ventralCol[2], 1.0));
+      }
+      topGrid.push(topRow);
+      botGrid.push(botRow);
+    }
+
+    for (let i = 0; i < xSlices; i++) {
+      for (let j = 0; j < zSlices; j++) {
+        mesh.quad(topGrid[i][j], topGrid[i][j + 1], topGrid[i + 1][j + 1], topGrid[i + 1][j]);
+        mesh.quad(botGrid[i][j], botGrid[i + 1][j], botGrid[i + 1][j + 1], botGrid[i][j + 1]);
+      }
+    }
+
+    // Cephalic Horns (front head lobes)
+    mesh.tube([[0.35, 0.05, bodyLen * 0.42], [0.42, 0.08, bodyLen * 0.54], [0.38, 0.02, bodyLen * 0.62]], 0.08, 4, true, true, () => dorsalCol);
+    mesh.tube([[-0.35, 0.05, bodyLen * 0.42], [-0.42, 0.08, bodyLen * 0.54], [-0.38, 0.02, bodyLen * 0.62]], 0.08, 4, true, true, () => dorsalCol);
+
+    // Whip tail
+    mesh.tube([[0, 0, -bodyLen * 0.5], [0, 0.02, -bodyLen * 0.9], [0, 0.04, -bodyLen * 1.5]], 0.04, 4, true, true, () => [0.1, 0.1, 0.12, 1.0]);
+
     mesh.computeVertexNormals();
     return mesh.toBuffers();
   }

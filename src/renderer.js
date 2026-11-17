@@ -115,6 +115,7 @@ export class SharedRenderer {
     // Compile Shaders
     this.programSolid = this.createGLProgram(VS_SOLID, FS_SOLID);
     this.programKelp = this.createGLProgram(VS_KELP, FS_SOLID);
+    this.programManta = this.createGLProgram(VS_MANTA, FS_SOLID);
     this.programFish = this.createGLProgram(VS_FISH, FS_FISH);
     this.programWaterSurface = this.createGLProgram(VS_WATER_SURFACE, FS_WATER_SURFACE);
     this.programParticles = this.createGLProgram(VS_PARTICLES, FS_PARTICLES);
@@ -125,6 +126,9 @@ export class SharedRenderer {
     ]);
     this.uKelp = this.getUniformLocations(this.programKelp, [
       'uViewProj', 'uCamPos', 'uSunDir', 'uSunCol', 'uWaterCol', 'uTime', 'uModel'
+    ]);
+    this.uManta = this.getUniformLocations(this.programManta, [
+      'uViewProj', 'uCamPos', 'uSunDir', 'uSunCol', 'uWaterCol', 'uTime', 'uModel', 'uWingPhase', 'uColorTint'
     ]);
     this.uFish = this.getUniformLocations(this.programFish, [
       'uViewProj', 'uCamPos', 'uSunDir', 'uSunCol', 'uWaterCol', 'uTime',
@@ -512,25 +516,26 @@ export class SharedRenderer {
     gl.uniform3fv(this.uSolid.uColorTint, [1, 1, 1]);
   }
 
-  // FIX #2: Boid rotation bug — proper Y-axis rotation from velocity yaw
-  // FIX #9: Frustum culling per boid
+  // Lifelike Schooling Boid Locomotion with spine wave swimming
   renderFishSchools(schoolMeshGPU, schools) {
     const gl = this.gl;
-    gl.useProgram(this.programSolid);
+    gl.useProgram(this.programFish);
 
-    gl.uniformMatrix4fv(this.uSolid.uViewProj, false, this.viewProjMatrix);
-    gl.uniform3fv(this.uSolid.uCamPos, this.camPos);
-    gl.uniform3fv(this.uSolid.uSunDir, this.sunDir);
-    gl.uniform3fv(this.uSolid.uSunCol, this.sunColor);
-    gl.uniform3fv(this.uSolid.uWaterCol, this.waterColor);
-    gl.uniform1f(this.uSolid.uTime, this.time);
-    gl.uniform3fv(this.uSolid.uColorTint, [1, 1, 1]);
+    gl.uniformMatrix4fv(this.uFish.uViewProj, false, this.viewProjMatrix);
+    gl.uniform3fv(this.uFish.uCamPos, this.camPos);
+    gl.uniform3fv(this.uFish.uSunDir, this.sunDir);
+    gl.uniform3fv(this.uFish.uSunCol, this.sunColor);
+    gl.uniform3fv(this.uFish.uWaterCol, this.waterColor);
+    gl.uniform1f(this.uFish.uTime, this.time);
+    gl.uniform1f(this.uFish.uIsPlayer, 0.0);
 
     const m = Mat4.create();
     gl.bindVertexArray(schoolMeshGPU.vao);
 
-    for (const school of schools) {
-      for (const boid of school.boids) {
+    for (let sIdx = 0; sIdx < schools.length; sIdx++) {
+      const school = schools[sIdx];
+      for (let bIdx = 0; bIdx < school.boids.length; bIdx++) {
+        const boid = school.boids[bIdx];
         const dx = boid.pos[0] - this.camPos[0];
         const dz = boid.pos[2] - this.camPos[2];
         if (dx * dx + dz * dz > 120.0 * 120.0) continue;
@@ -543,11 +548,6 @@ export class SharedRenderer {
         const cy = Math.cos(yaw), sy = Math.sin(yaw);
         const s = 0.8;
 
-        // Column-major Y-rotation * scale:
-        // col0: [cy*s, 0,    sy*s, 0]
-        // col1: [0,    s,    0,    0]
-        // col2: [-sy*s,0,    cy*s, 0]
-        // col3: [tx,   ty,   tz,   1]
         m[0]  =  cy * s; m[1]  = 0;   m[2]  =  sy * s; m[3]  = 0;
         m[4]  =  0;      m[5]  = s;   m[6]  =  0;      m[7]  = 0;
         m[8]  = -sy * s; m[9]  = 0;   m[10] =  cy * s; m[11] = 0;
@@ -556,30 +556,60 @@ export class SharedRenderer {
         m[14] = boid.pos[2];
         m[15] = 1;
 
-        gl.uniformMatrix4fv(this.uSolid.uModel, false, m);
+        const boidSpeed = Math.hypot(boid.vel[0], boid.vel[1], boid.vel[2]);
+        const boidPhase = this.time * (6.5 + boidSpeed * 1.8) + (sIdx * 19.3 + bIdx * 2.71);
+
+        gl.uniformMatrix4fv(this.uFish.uModel, false, m);
+        gl.uniform1f(this.uFish.uTailPhase, boidPhase);
+        gl.uniform1f(this.uFish.uTailAmp, 0.16);
+        gl.uniform1f(this.uFish.uPectoralPhase, boidPhase * 0.7);
+
         gl.drawElements(gl.TRIANGLES, schoolMeshGPU.indexCount, schoolMeshGPU.indexType, 0);
       }
     }
     gl.bindVertexArray(null);
   }
 
+  // Oceanic Pelagic Manta Ray Flight with Pectoral Wing Sine Undulation & Forward Heading Yaw
   renderMantas(mantaMeshGPU, mantas) {
     const gl = this.gl;
-    gl.useProgram(this.programSolid);
-    gl.uniform3fv(this.uSolid.uColorTint, [1, 1, 1]);
+    gl.useProgram(this.programManta);
+
+    gl.uniformMatrix4fv(this.uManta.uViewProj, false, this.viewProjMatrix);
+    gl.uniform3fv(this.uManta.uCamPos, this.camPos);
+    gl.uniform3fv(this.uManta.uSunDir, this.sunDir);
+    gl.uniform3fv(this.uManta.uSunCol, this.sunColor);
+    gl.uniform3fv(this.uManta.uWaterCol, this.waterColor);
+    gl.uniform1f(this.uManta.uTime, this.time);
+    gl.uniform3fv(this.uManta.uColorTint, [1, 1, 1]);
 
     const m = Mat4.create();
     gl.bindVertexArray(mantaMeshGPU.vao);
 
     for (const manta of mantas) {
       if (!manta.pos) continue;
-      const s = manta.scale;
-      m[0] = s; m[5] = s; m[10] = s;
+      const s = manta.scale || 1.0;
+
+      // Realistic heading yaw aligned with tangent of circular thermal sweep
+      const vx = -Math.sin(manta.phase) * (manta.speed || 0.08);
+      const vz =  Math.cos(manta.phase) * (manta.speed || 0.08);
+      const yaw = Math.atan2(vx, vz);
+      const cy = Math.cos(yaw), sy = Math.sin(yaw);
+
+      // Column-major Y-rotation * scale
+      m[0]  =  cy * s; m[1]  = 0;   m[2]  =  sy * s; m[3]  = 0;
+      m[4]  =  0;      m[5]  = s;   m[6]  =  0;      m[7]  = 0;
+      m[8]  = -sy * s; m[9]  = 0;   m[10] =  cy * s; m[11] = 0;
       m[12] = manta.pos[0];
       m[13] = manta.pos[1];
       m[14] = manta.pos[2];
+      m[15] = 1;
 
-      gl.uniformMatrix4fv(this.uSolid.uModel, false, m);
+      // Graceful biological wing beat frequency (~2.4 rad/s)
+      const wingPhase = this.time * 2.4 + (manta.phase || 0) * 4.0;
+      gl.uniform1f(this.uManta.uWingPhase, wingPhase);
+      gl.uniformMatrix4fv(this.uManta.uModel, false, m);
+
       gl.drawElements(gl.TRIANGLES, mantaMeshGPU.indexCount, mantaMeshGPU.indexType, 0);
     }
     gl.bindVertexArray(null);
@@ -1103,6 +1133,40 @@ void main() {
 }
 `;
 
+const VS_MANTA = `#version 300 es
+layout(location = 0) in vec3 aPos;
+layout(location = 1) in vec3 aNormal;
+layout(location = 2) in vec2 aUV;
+layout(location = 3) in vec4 aColor;
+
+uniform mat4 uViewProj;
+uniform mat4 uModel;
+uniform float uWingPhase;
+
+out vec3 vWorldPos;
+out vec3 vNormal;
+out vec2 vUV;
+out vec4 vColor;
+
+void main() {
+  vec3 p = aPos;
+  // Fluid oceanic pectoral wing flapping:
+  // Wave propagates from center (x=0) to vast wingtips (x = ±1.5) and toward trailing edge (z < 0)
+  float wingSpan = abs(p.x);
+  float wingWave = sin(uWingPhase - wingSpan * 1.6 - p.z * 1.2) * (pow(wingSpan, 1.45) * 0.26);
+  p.y += wingWave;
+  // Wingtip trailing curl
+  p.z += cos(uWingPhase - wingSpan * 1.6) * (pow(wingSpan, 1.3) * 0.08);
+
+  vec4 wp = uModel * vec4(p, 1.0);
+  vWorldPos = wp.xyz;
+  vNormal = normalize(mat3(uModel) * aNormal);
+  vUV = aUV;
+  vColor = aColor;
+  gl_Position = uViewProj * wp;
+}
+`;
+
 const VS_FISH = `#version 300 es
 layout(location = 0) in vec3 aPos;
 layout(location = 1) in vec3 aNormal;
@@ -1123,22 +1187,79 @@ out vec4 vColor;
 
 void main() {
   vec3 localPos = aPos;
+  vec3 deformedNorm = aNormal;
+  float zPos = aPos.z;
 
-  // Biological Spine Traveling Wave Undulation:
-  // Traveling wave propagates from head (z > 0) to caudal fin (z < 0)
-  float tailWeight = max(0.0, -localPos.z); // zero at snout, rises towards tail
-  float wave = sin(uTailPhase - localPos.z * 6.5) * uTailAmp * pow(tailWeight + 0.1, 1.35);
-  localPos.x += wave;
+  // =========================================================================
+  // 1. BIOMECHANICAL COMPOSITE SPINE PROPULSION WAVE (Subcarangiform / S-Curve)
+  // =========================================================================
+  // Bending flexibility envelope (stiff skull, flexible peduncle, whip-like caudal fin)
+  float flexEnv = max(0.0, 0.22 - zPos);
+  float primaryWave = sin(uTailPhase - zPos * 6.8) * uTailAmp * pow(flexEnv, 1.55);
 
-  // Pectoral fin sculling flapping
-  if (abs(localPos.x) > 0.06 && localPos.z > 0.05 && localPos.z < 0.25) {
-    float flap = sin(uPectoralPhase) * 0.035 * sign(localPos.x);
-    localPos.y += flap;
+  // Micro-harmonic fin ray flutter at the trailing edge of the caudal fin
+  float tailFinFlutter = sin(uTailPhase * 1.5 - zPos * 14.0) * (uTailAmp * 0.22) * max(0.0, -zPos - 0.26);
+
+  // Hydrodynamic Head Counter-Yaw (snout oscillates in opposition to caudal sweep)
+  float headTorque = -sin(uTailPhase + 0.25) * (uTailAmp * 0.16) * clamp(zPos, 0.0, 0.45);
+
+  // Dorsal & Anal fin traveling wave ripple along fin margins
+  float finMargin = smoothstep(0.07, 0.24, abs(aPos.y)) * max(0.0, 0.12 - zPos);
+  float finWave = sin(uTailPhase * 1.25 - zPos * 8.6) * (uTailAmp * 0.22) * finMargin;
+
+  float totalSpineDisp = primaryWave + tailFinFlutter + headTorque + finWave;
+  localPos.x += totalSpineDisp;
+
+  // Dynamic Normal Vector Realignment:
+  // Tilts surface normal along wave gradient so specular highlights bend naturally
+  float bendSlope = -cos(uTailPhase - zPos * 6.8) * 6.8 * uTailAmp * pow(flexEnv, 1.55);
+  deformedNorm.z -= deformedNorm.x * bendSlope * 0.7;
+
+  // =========================================================================
+  // 2. 3D PECTORAL FIN ROWING & FEATHERING (FIGURE-8 STROKE CYCLE)
+  // =========================================================================
+  if (abs(aPos.x) > 0.05 && zPos > 0.02 && zPos < 0.35) {
+    float stroke = sin(uPectoralPhase);
+    float feather = cos(uPectoralPhase);
+    float span = abs(aPos.x) - 0.045;
+
+    // Power stroke splays outward & sweeps backward; recovery feathers inward
+    localPos.x += stroke * span * 0.65 * sign(aPos.x);
+    localPos.y += feather * span * 0.42;
+    localPos.z += -max(0.0, -stroke) * span * 0.32;
+  }
+
+  // =========================================================================
+  // 3. SPECIES-SPECIFIC ANATOMICAL MODULATION
+  // =========================================================================
+  // A. Moon Jellyfish Medusan Bell Jetting (translucent bell alpha < 0.82)
+  if (aColor.a < 0.82) {
+    float pulse = pow(sin(uPectoralPhase * 0.75) * 0.5 + 0.5, 2.2);
+    if (aPos.y > -0.25) {
+      // Radial bell contraction during power stroke
+      localPos.xz *= (1.0 - pulse * 0.26);
+      localPos.y += pulse * 0.09;
+    } else {
+      // Trailing oral arms and tentacles ripple with fluid hydrodynamic drag
+      float lag = -aPos.y * 3.2;
+      localPos.x += sin(uPectoralPhase * 0.75 - lag) * 0.07;
+      localPos.z += cos(uPectoralPhase * 0.75 - lag) * 0.07;
+    }
+  }
+
+  // B. Green Sea Turtle Flipper Propulsion (wide flippers abs(aPos.x) > 0.22)
+  if (abs(aPos.x) > 0.22 && aPos.y < 0.12 && aPos.y > -0.15) {
+    float turtleStroke = sin(uPectoralPhase * 0.6);
+    float turtleFeather = cos(uPectoralPhase * 0.6);
+    float flipperSpan = abs(aPos.x) - 0.18;
+    localPos.y += turtleStroke * flipperSpan * 0.75;
+    localPos.x += turtleFeather * flipperSpan * 0.28 * sign(aPos.x);
+    localPos.z -= turtleStroke * flipperSpan * 0.22;
   }
 
   vec4 wp = uModel * vec4(localPos, 1.0);
   vWorldPos = wp.xyz;
-  vNormal = normalize(mat3(uModel) * aNormal);
+  vNormal = normalize(mat3(uModel) * deformedNorm);
   vUV = aUV;
   vColor = aColor;
   gl_Position = uViewProj * wp;

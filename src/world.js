@@ -28,6 +28,8 @@ export const CORE_LANDMARKS = [
   { id: 'sunlit_atoll', name: 'The Shallow Sunlit Atoll', pos: [-38, -6, 28], radius: 22, discovered: false, desc: "A warm, sun-drenched reef crest where turquoise waves break and baby fish learn to swim." }
 ];
 
+export const LANDMARKS = CORE_LANDMARKS;
+
 export class InfiniteOceanWorld {
   constructor(quality = 0) { // 0: High, 1: Medium, 2: Low
     this.quality = quality;

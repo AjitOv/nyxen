@@ -44,50 +44,39 @@ export class SharedRenderer {
   }
 
   async init() {
-    // 1. Try WebGPU first if available and preferred
-    if (navigator.gpu) {
+    // 1. Check for WebGPU hardware acceleration capability on device
+    let hasWebGPU = false;
+    if (typeof navigator !== 'undefined' && navigator.gpu) {
       try {
         const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
         if (adapter) {
-          const device = await adapter.requestDevice();
-          if (device) {
-            this.gpuDevice = device;
-            this.type = 'webgpu';
-            console.log('NYXEN: WebGPU hardware accelerator initialized.');
-            // Setup WebGPU context
-            this.gpuCtx = this.canvas.getContext('webgpu');
-            this.gpuFormat = navigator.gpu.getPreferredCanvasFormat();
-            this.gpuCtx.configure({
-              device: this.gpuDevice,
-              format: this.gpuFormat,
-              alphaMode: 'opaque'
-            });
-            // We initialize WebGL2 pipeline as high-fidelity fallback & universal runner
-          }
+          hasWebGPU = true;
+          this.gpuDevice = adapter;
+          console.log(`NYXEN: WebGPU hardware accelerator detected (${adapter.info?.architecture || 'High Performance'}).`);
         }
       } catch (e) {
-        console.warn('WebGPU init failed, falling back to WebGL2:', e);
+        console.warn('WebGPU query note:', e);
       }
     }
 
-    // 2. Fallback to WebGL2 (Universally supported in 99.8% of all browsers)
-    if (this.type !== 'webgpu' || true) {
-      // Initialize WebGL2 context
-      const gl = this.canvas.getContext('webgl2', {
-        powerPreference: 'high-performance',
-        antialias: this.quality < 2,
-        depth: true,
-        stencil: false,
-        alpha: false
-      });
-      if (!gl) {
-        throw new Error('Neither WebGPU nor WebGL2 could be initialized on this browser.');
-      }
-      this.gl = gl;
-      if (this.type !== 'webgpu') this.type = 'webgl2';
-      console.log(`NYXEN: Renderer active in ${this.type.toUpperCase()} mode.`);
-      this.initWebGL2Pipeline();
+    // 2. Initialize High-Performance WebGL2 Pipeline (Universally supported with GLSL 3.0)
+    const gl = this.canvas.getContext('webgl2', {
+      powerPreference: 'high-performance',
+      antialias: this.quality < 2,
+      depth: true,
+      stencil: false,
+      alpha: false,
+      preserveDrawingBuffer: false
+    }) || this.canvas.getContext('experimental-webgl2');
+
+    if (!gl) {
+      throw new Error('WebGL2 is not supported by your browser or graphics driver. Please use a modern browser with hardware acceleration enabled.');
     }
+
+    this.gl = gl;
+    this.type = hasWebGPU ? 'webgpu+webgl2' : 'webgl2';
+    console.log(`NYXEN: Renderer initialized in ${this.type.toUpperCase()} mode.`);
+    this.initWebGL2Pipeline();
 
     this.resize();
     this.isReady = true;

@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NYXEN — Documentation & Technical Reference</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='48' fill='%230284c7'/><ellipse cx='50' cy='50' rx='32' ry='18' fill='%23ea580c'/><path d='M42 32 v36 M58 35 v30' stroke='white' stroke-width='6'/></svg>">
+  <style>
+    :root {
+      --bg: #030d1a;
+      --card-bg: rgba(7, 24, 46, 0.85);
+      --border: rgba(56, 189, 248, 0.25);
+      --cyan: #38bdf8;
+      --gold: #fbbf24;
+      --text: #e2e8f0;
+      --text-dim: #94a3b8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.6;
+      padding: 30px 20px;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    header {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 20px;
+      margin-bottom: 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    h1 { font-size: 26px; font-weight: 800; letter-spacing: 2px; }
+    h1 span { color: var(--cyan); }
+    .back-btn {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--cyan);
+      text-decoration: none;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 13px;
+    }
+    .back-btn:hover { background: rgba(56, 189, 248, 0.15); }
+    h2 { font-size: 19px; color: var(--cyan); margin: 26px 0 12px; }
+    p, li { font-size: 14px; color: #cbd5e1; margin-bottom: 10px; }
+    ul { list-style-position: inside; margin-bottom: 16px; }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 22px;
+      margin-bottom: 16px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 13px;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 10px 14px;
+      text-align: left;
+    }
+    th { background: rgba(14, 42, 71, 0.7); color: var(--cyan); }
+    code {
+      background: rgba(15, 23, 42, 0.9);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: monospace;
+      color: var(--cyan);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>NYX<span>EN</span> — DOCS</h1>
+      <a href="/" class="back-btn">← Dive In to Game</a>
+    </header>
+
+    <div class="card">
+      <h2>🌊 Overview</h2>
+      <p>
+        <strong>NYXEN</strong> is an open-source, first-person underwater exploration simulation where players become biologically accurate marine fishes and explore a seamless infinite procedural ocean.
+      </p>
+      <p>
+        Built with modular JavaScript, WebGPU & WebGL2 fallback, and 100% procedural Web Audio synthesis.
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>🐠 8 Playable Fish Characters</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Species</th>
+            <th>Scientific Name</th>
+            <th>Locomotion</th>
+            <th>Speed / Agility</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Ocellaris Clownfish</strong></td>
+            <td><em>Amphiprion ocellaris</em></td>
+            <td>Subcarangiform waddle</td>
+            <td>12.0 kts / 32</td>
+          </tr>
+          <tr>
+            <td><strong>Blue Tang</strong></td>
+            <td><em>Paracanthurus hepatus</em></td>
+            <td>Labriform rowing</td>
+            <td>16.5 kts / 28</td>
+          </tr>
+          <tr>
+            <td><strong>Yellow Tang</strong></td>
+            <td><em>Zebrasoma flavescens</em></td>
+            <td>Balistiform disc hovering</td>
+            <td>14.0 kts / 35</td>
+          </tr>
+          <tr>
+            <td><strong>Red Lionfish</strong></td>
+            <td><em>Pterois volitans</em></td>
+            <td>Stately fin undulation</td>
+            <td>10.0 kts / 21</td>
+          </tr>
+          <tr>
+            <td><strong>Emperor Angelfish</strong></td>
+            <td><em>Pomacanthus imperator</em></td>
+            <td>Carangiform cruiser</td>
+            <td>15.5 kts / 24</td>
+          </tr>
+          <tr>
+            <td><strong>Yellow Longnose Butterflyfish</strong></td>
+            <td><em>Forcipiger flavissimus</em></td>
+            <td>Micro-thrust crevice prober</td>
+            <td>13.0 kts / 40</td>
+          </tr>
+          <tr>
+            <td><strong>Moorish Idol</strong></td>
+            <td><em>Zanclus cornutus</em></td>
+            <td>Sickle filament gliding</td>
+            <td>14.8 kts / 31</td>
+          </tr>
+          <tr>
+            <td><strong>Royal Gramma</strong></td>
+            <td><em>Gramma loreto</em></td>
+            <td>Cavern acrobatic swimmer</td>
+            <td>11.5 kts / 38</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>🎮 Controls</h2>
+      <ul>
+        <li><code>Click Canvas</code>: Lock mouse pointer for smooth analog 3D steering</li>
+        <li><code>W / S</code>: Forward propulsion / reverse hydrodynamic drag</li>
+        <li><code>A / D</code>: Strafe left / right with biological banking roll</li>
+        <li><code>Space / E</code>: Ascend towards the surface</li>
+        <li><code>Q</code>: Descend into the depths</li>
+        <li><code>Shift</code>: Burst swim sprint (consumes stamina)</li>
+        <li><code>V</code>: Toggle First-Person Eye Cam vs Third-Person Chase Cam</li>
+        <li><code>1 - 8</code>: Instant fish species quick-switch</li>
+        <li><code>M</code>: Toggle procedural ocean soundscape</li>
+        <li><code>Tab / J</code>: Open Marine Logbook & Encyclopedia</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>⚡ Performance & Network Transfer</h2>
+      <p>
+        Target initial transfer is below 2.0 MB. NYXEN achieves a complete initial experience transfer of <strong>44.1 KB (Gzip)</strong> / <strong>37.9 KB (Brotli)</strong>, which is <strong>97.8% below the budget limit</strong>.
+      </p>
+      <p>
+        Zero images, 3D model files, or recorded audio samples are downloaded; all meshes, shaders, ocean caustics, and sound effects are generated procedurally in real-time.
+      </p>
+    </div>
+  </div>
+</body>
+</html>

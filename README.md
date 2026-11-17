@@ -30,21 +30,24 @@ Play as 8 distinct tropical reef species, each crafted with species-specific 3D 
   - High-speed stamina sprint burst with hydrophone whoosh audio feedback.
   - Soft collision repulsion from ocean floor and cavern ceilings.
 
-### 3. Procedural Coral Eden Environment
-- **Rolling Seabed & Valleys**: Procedural 3D noise terrain ranging from shallow sunlit atolls ($-5\text{m}$) to abyssal basins ($-45\text{m}$).
-- **The Sunken Galleon ("The Siren's Rest")**: 17th-century wooden shipwreck with curved keel, ribs, fallen masts, and a hull breach you can swim through.
-- **The Whale Fluke Monolith**: Ancient colossal stone whale tail carving emerging from the sand.
-- **The Luminescent Purple Grotto**: Deep cavern system with glowing magenta ground cover and barrel sponges.
-- **The Kelp Forest Cathedral**: Towering *Macrocystis* giant kelp swaying with current-dependent vertex deformation.
-- **The Grand Coral Archway & Anemone Gardens**: Natural limestone arches, staghorn branching corals, brain coral domes, table corals, sea fans, and waving anemone tentacles.
+### 3. Infinite Procedural Ocean & Spatial Chunk Streaming
+- **Endless Ocean Exploration**: Rather than a bounded box, NYXEN features an infinite procedural ocean with continuous dynamic spatial chunk streaming ($64\text{m} \times 64\text{m}$ chunk tiles).
+- **Infinite Biome Spectrum**:
+  1. **Coral Eden (Starting Sanctuary)**: Handcrafted starting reef ($r < 140\text{m}$) containing the Sunken Galleon, Whale Fluke Monolith, Grand Coral Arch, and Giant Anemone Sanctuary.
+  2. **Sunlit Barrier Reef & Atoll**: Shallow sunlit reef crests ($-5\text{m}$ to $-16\text{m}$) with dense staghorn, brain corals, sea fans, and anemones.
+  3. **Giant Kelp Cathedral Basin**: Deep nutrient-rich basins ($-18\text{m}$ to $-34\text{m}$) with towering 30m+ swaying giant kelp and amber sunbeams.
+  4. **Luminescent Abyssal Trench**: Deep dark ocean valleys ($-36\text{m}$ to $-65\text{m}$) with glowing violet/cyan moss, hydrothermal bubble chimneys, and deep-sea life.
+  5. **Volcanic Seamount Pinnacles**: Conical underwater volcanoes rising sharply toward the surface, surrounded by gliding manta rays.
+  6. **Shipwreck Relics & Shoals**: Ancient sunken hulls, fallen yards, and lost anchors encrusted with corals and pearl oysters.
 - **Atmospheric Lighting**:
   - Beer-Lambert spectral absorption depth fog (red wavelengths absorbed at 5m, green at 20m, blue penetrating past 50m).
   - Dynamic optical caustics dancing on the seabed, rocks, and fish scales.
-  - Volumetric surface sunbeams and undulating water surface reflections.
+  - Volumetric surface sunbeams and undulating water surface reflections that dynamically follow the player to infinity.
 - **Living Ecosystem**:
   - Autonomous schools of reef fish (Boids flocking simulation) that scatter when approached.
   - Manta rays cruising in sweeping thermal circles with flapping pectoral wings.
-  - Suspended marine snow particles and rising hydrothermal vent bubbles.
+  - Suspended marine snow particles wrapping continuously around the player.
+  - Procedural landmark discoveries and collectible pearls generated across distant chunks.
 
 ### 4. 100% Procedural Web Audio Soundscape
 - Live synthesis via the Web Audio API with zero sample file downloads:

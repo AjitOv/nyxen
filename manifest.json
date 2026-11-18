@@ -1,7 +1,7 @@
 {
   "name": "NYXEN — Underwater Ocean Simulation & Battle Royale",
   "short_name": "NYXEN",
-  "id": "/nyxen",
+  "id": "nyxen-ocean",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

@@ -87,7 +87,12 @@ export class FishPhysics {
     this.pitch = clamp(this.pitch + pitchDelta, -1.25, 1.25); // ~70 deg max pitch
 
     // 2. Sprint / Burst handling & Stamina
-    if (input.sprint && this.stamina > 0.05 && (input.forward || input.ascend || input.descend)) {
+    const hasLightning = this.activePower && this.activePower.type && this.activePower.type.id === 'lightning_surge';
+
+    if (hasLightning) {
+      this.isBursting = true;
+      this.stamina = 1.0; // Infinite hyper-drive stamina while electro-charged!
+    } else if (input.sprint && this.stamina > 0.05 && (input.forward || input.ascend || input.descend)) {
       this.isBursting = true;
       this.stamina = max(0.0, this.stamina - dt * 0.35);
     } else {
@@ -95,7 +100,10 @@ export class FishPhysics {
       this.stamina = min(1.0, this.stamina + dt * 0.25 * spec.staminaRegen);
     }
 
-    const targetSpeed = this.isBursting ? spec.burstSpeed : spec.speed;
+    let targetSpeed = this.isBursting ? spec.burstSpeed : spec.speed;
+    if (hasLightning) {
+      targetSpeed *= 2.6; // 3.5x hyper-drive thrust
+    }
 
     // 3. Forward & Vertical Thrust
     this._accel[0] = 0; this._accel[1] = 0; this._accel[2] = 0;

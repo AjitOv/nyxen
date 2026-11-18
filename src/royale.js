@@ -188,14 +188,33 @@ export class BattleRoyaleManager {
     }
   }
 
-  update(dt, playerPos, playerForward, isFiringWaterJet, isFiringVenom) {
+  update(dt, playerPos, playerForward, isFiringWaterJet, isFiringVenom, activeSuperpower = null) {
     if (this.state === MATCH_STATES.EXPLORATION) return;
 
+    this.activeSuperpower = activeSuperpower;
     this.matchTimer += dt;
     this.fireCooldown = max(0, this.fireCooldown - dt);
     this.secondaryCooldown = max(0, this.secondaryCooldown - dt);
     this.hitMarkerTimer = max(0, this.hitMarkerTimer - dt);
     this.damageVignetteTimer = max(0, this.damageVignetteTimer - dt);
+
+    // Active Sonic Shockwave pulse generator
+    if (this.activeSuperpower && this.activeSuperpower.type && this.activeSuperpower.type.id === 'sonic_shockwave') {
+      this.sonicTimer = (this.sonicTimer || 0) + dt;
+      if (this.sonicTimer >= 3.5) {
+        this.sonicTimer = 0;
+        if (this.audio && this.audio.playSonicShockwave) this.audio.playSonicShockwave();
+        for (const bot of this.bots) {
+          if (!bot.alive) continue;
+          const d = hypot(bot.pos[0] - playerPos[0], bot.pos[1] - playerPos[1], bot.pos[2] - playerPos[2]);
+          if (d < 40.0) {
+            bot.stunTimer = 3.0;
+            this.damageBot(bot, 18, 'Bio-Sonic EMP');
+          }
+        }
+        this.showToast('💥 Bio-Sonic EMP Stunned Nearby Fish!', 2000);
+      }
+    }
 
     // 1. Countdown Phase
     if (this.state === MATCH_STATES.COUNTDOWN) {
@@ -272,9 +291,12 @@ export class BattleRoyaleManager {
   }
 
   handlePlayerInput(playerPos, playerForward, isFiringWaterJet, isFiringVenom) {
+    const isVortex = this.activeSuperpower && this.activeSuperpower.type && this.activeSuperpower.type.id === 'vortex_torpedo';
+    const isCloaked = this.activeSuperpower && this.activeSuperpower.type && this.activeSuperpower.type.id === 'phantom_cloak';
+
     // Left-click Water Jet
     if (isFiringWaterJet && this.fireCooldown <= 0) {
-      this.fireCooldown = 0.22; // ~4.5 shots per sec
+      this.fireCooldown = isVortex ? 0.32 : 0.22; // ~4.5 shots per sec
 
       const spawnPos = [
         playerPos[0] + playerForward[0] * 0.9,
@@ -282,25 +304,31 @@ export class BattleRoyaleManager {
         playerPos[2] + playerForward[2] * 0.9
       ];
 
-      const spd = 42.0;
+      const spd = isVortex ? 54.0 : 42.0;
       const vel = [
         playerForward[0] * spd + (rnd() - 0.5) * 0.8,
         playerForward[1] * spd + (rnd() - 0.5) * 0.8,
         playerForward[2] * spd + (rnd() - 0.5) * 0.8
       ];
 
+      const damage = isVortex ? 65 : (isCloaked ? 55 : 24);
+      const radius = isVortex ? 1.25 : 0.55;
+      const color = isVortex ? [0.15, 0.65, 1.0, 1.0] : (isCloaked ? [0.85, 0.35, 1.0, 0.95] : [0.35, 0.85, 1.0, 0.9]);
+
       this.projectiles.push({
         pos: spawnPos,
         vel,
-        life: 1.5,
-        maxLife: 1.5,
+        life: isVortex ? 2.0 : 1.5,
+        maxLife: isVortex ? 2.0 : 1.5,
         fromPlayer: true,
-        damage: 24,
-        radius: 0.55,
-        color: [0.35, 0.85, 1.0, 0.9]
+        damage,
+        radius,
+        color
       });
 
-      if (this.audio && this.audio.playBubbleBurst) {
+      if (isVortex && this.audio && this.audio.playVortexBlast) {
+        this.audio.playVortexBlast();
+      } else if (this.audio && this.audio.playBubbleBurst) {
         this.audio.playBubbleBurst();
       }
     }
@@ -362,16 +390,50 @@ export class BattleRoyaleManager {
         // 2. Bot Projectile hitting Player
         const distToPlayer = hypot(p.pos[0] - playerPos[0], p.pos[1] - playerPos[1], p.pos[2] - playerPos[2]);
         if (distToPlayer < p.radius + 0.75) {
-          this.damagePlayer(p.damage, p.shooterName || 'Opponent');
-          this.projectiles.splice(i, 1);
+          if (this.activeSuperpower && this.activeSuperpower.type && this.activeSuperpower.type.id === 'titan_aegis') {
+            // Reflect projectile back with speed & damage bonus
+            p.fromPlayer = true;
+            p.vel[0] = -p.vel[0] * 1.35;
+            p.vel[1] = -p.vel[1] * 1.35;
+            p.vel[2] = -p.vel[2] * 1.35;
+            p.color = [0.25, 0.95, 0.75, 1.0];
+            p.damage = Math.round(p.damage * 1.5);
+            p.life = 1.5;
+            if (this.audio && this.audio.playShieldDeflect) {
+              this.audio.playShieldDeflect();
+            }
+            this.showToast('🛡️ Titan Aegis Deflected Projectile!', 1200);
+          } else {
+            this.damagePlayer(p.damage, p.shooterName || 'Opponent');
+            this.projectiles.splice(i, 1);
+          }
         }
       }
     }
   }
 
   updateBots(dt, playerPos) {
+    const hasLightning = this.activeSuperpower && this.activeSuperpower.type && this.activeSuperpower.type.id === 'lightning_surge';
+    const isCloaked = this.activeSuperpower && this.activeSuperpower.type && this.activeSuperpower.type.id === 'phantom_cloak';
+
     for (const bot of this.bots) {
       if (!bot.alive) continue;
+
+      if (bot.stunTimer && bot.stunTimer > 0) {
+        bot.stunTimer -= dt;
+        continue; // Paralyzed by Bio-Sonic EMP!
+      }
+
+      // Lightning Surge ramming collision
+      if (hasLightning) {
+        const dRam = hypot(bot.pos[0] - playerPos[0], bot.pos[1] - playerPos[1], bot.pos[2] - playerPos[2]);
+        if (dRam < 2.5) {
+          this.damageBot(bot, 140 * dt, 'Lightning Surge');
+          if (this.audio && this.audio.playShieldDeflect && rnd() < 0.2) {
+            this.audio.playShieldDeflect();
+          }
+        }
+      }
 
       bot.tailPhase += dt * (bot.isBursting ? 12.0 : 5.0);
       bot.shootCooldown -= dt;
@@ -403,7 +465,9 @@ export class BattleRoyaleManager {
       // Rule B: Target Acquisition & Combat (Detect Player or nearest Bot)
       const distToPlayer = hypot(playerPos[0] - bot.pos[0], playerPos[1] - bot.pos[1], playerPos[2] - bot.pos[2]);
 
-      if (distToPlayer < 40.0) {
+      // Phantom Cloak grants stealth: bot only detects if player is very close (within 8m)
+      const detectionRadius = isCloaked ? 8.0 : 40.0;
+      if (distToPlayer < detectionRadius) {
         // Engage player!
         const toPlayerX = (playerPos[0] - bot.pos[0]) / distToPlayer;
         const toPlayerY = (playerPos[1] - bot.pos[1]) / distToPlayer;
@@ -480,6 +544,11 @@ export class BattleRoyaleManager {
 
   damagePlayer(dmg, source) {
     if (this.state !== MATCH_STATES.ACTIVE) return;
+
+    // Titan Aegis Superpower provides 100% invulnerability to all damage
+    if (this.activeSuperpower && this.activeSuperpower.type && this.activeSuperpower.type.id === 'titan_aegis') {
+      return;
+    }
 
     if (this.playerShield > 0) {
       const shieldDmg = min(this.playerShield, dmg);

@@ -57,6 +57,9 @@ async function run() {
   console.log(`  - seaFan: ${seaFanMesh.vertexCount} verts`);
   const anemoneMesh = world.buildAnemoneMesh();
   console.log(`  - anemone: ${anemoneMesh.vertexCount} verts`);
+  const superpowerRelicMesh = world.buildSuperpowerRelicMesh();
+  console.log(`  - superpowerRelic: ${superpowerRelicMesh.vertexCount} verts, ${superpowerRelicMesh.indexCount} indices`);
+  console.log(`  - Active Superpower Relics in Ocean: ${world.superpowerRelics.length}`);
 
   const f = await import('./src/fish_physics.js');
   console.log('✓ fish_physics.js loaded');

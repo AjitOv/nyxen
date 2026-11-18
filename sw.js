@@ -3,7 +3,7 @@
 // Offline resilience, instant launch caching, stale-while-revalidate strategy.
 // ============================================================================
 
-const CACHE_NAME = 'nyxen-ocean-v1.0.1';
+const CACHE_NAME = 'nyxen-ocean-v1.0.2';
 
 const STATIC_ASSETS = [
   './',

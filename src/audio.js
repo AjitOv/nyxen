@@ -306,4 +306,106 @@ export class MarineAudio {
     osc.start(t);
     osc.stop(t + 0.45);
   }
+
+  // ----------------------------------------------------------------
+  // Superpower Audio Synthesizers
+  // ----------------------------------------------------------------
+  playPowerupPickup(type) {
+    if (!this.isInitialized || this.muted) return;
+    const ac = this.ctx;
+    const t = ac.currentTime;
+
+    // Ascending Celestial Fanfare Arpeggio [C5, E5, G5, C6, E6]
+    const notes = [523.25, 659.25, 783.99, 1046.50, 1318.51];
+    notes.forEach((freq, idx) => {
+      const osc = ac.createOscillator();
+      const gain = ac.createGain();
+      const delay = idx * 0.08;
+
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, t + delay);
+      osc.frequency.exponentialRampToValueAtTime(freq * 1.05, t + delay + 0.35);
+
+      gain.gain.setValueAtTime(0, t + delay);
+      gain.gain.linearRampToValueAtTime(0.18, t + delay + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + delay + 0.85);
+
+      osc.connect(gain);
+      gain.connect(this.masterGain);
+
+      osc.start(t + delay);
+      osc.stop(t + delay + 0.9);
+    });
+  }
+
+  playShieldDeflect() {
+    if (!this.isInitialized || this.muted) return;
+    const ac = this.ctx;
+    const t = ac.currentTime;
+
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(1480.0, t);
+    osc.frequency.exponentialRampToValueAtTime(440.0, t + 0.3);
+
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.25, t + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+
+    osc.start(t);
+    osc.stop(t + 0.4);
+  }
+
+  playSonicShockwave() {
+    if (!this.isInitialized || this.muted) return;
+    const ac = this.ctx;
+    const t = ac.currentTime;
+
+    // Sub-bass sonar pulse
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(280.0, t);
+    osc.frequency.exponentialRampToValueAtTime(45.0, t + 0.8);
+
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.35, t + 0.03);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 1.2);
+
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+
+    osc.start(t);
+    osc.stop(t + 1.3);
+  }
+
+  playVortexBlast() {
+    if (!this.isInitialized || this.muted) return;
+    const ac = this.ctx;
+    const t = ac.currentTime;
+
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(120.0, t);
+    osc.frequency.exponentialRampToValueAtTime(680.0, t + 0.25);
+    osc.frequency.exponentialRampToValueAtTime(90.0, t + 0.6);
+
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.28, t + 0.04);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.65);
+
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+
+    osc.start(t);
+    osc.stop(t + 0.7);
+  }
 }

@@ -28,6 +28,54 @@ export const CORE_LANDMARKS = [
   { id: 'sunlit_atoll', name: 'The Shallow Sunlit Atoll', pos: [-38, -6, 28], radius: 22, discovered: false, desc: "A warm, sun-drenched reef crest where turquoise waves break and baby fish learn to swim." }
 ];
 
+export const SUPERPOWERS = {
+  LIGHTNING_SURGE: {
+    id: 'lightning_surge',
+    name: 'Lightning Surge',
+    icon: '⚡',
+    duration: 16.0,
+    desc: '3.5x Hyper-Drive Speed, Infinite Stamina, Electric Ramming Damage!',
+    tint: [1.0, 0.85, 0.15],
+    colorHex: '#fbbf24'
+  },
+  TITAN_AEGIS: {
+    id: 'titan_aegis',
+    name: 'Abyssal Titan Aegis',
+    icon: '🛡️',
+    duration: 14.0,
+    desc: '100% Invulnerability, Reflects Enemy Projectiles, +100 Overshield!',
+    tint: [0.2, 0.9, 1.0],
+    colorHex: '#38bdf8'
+  },
+  VORTEX_TORPEDO: {
+    id: 'vortex_torpedo',
+    name: 'Maelstrom Vortex Cannon',
+    icon: '🌊',
+    duration: 18.0,
+    desc: 'Hydro-Vortex Torpedoes with Massive AOE Implosion Shockwaves!',
+    tint: [0.1, 0.55, 1.0],
+    colorHex: '#2563eb'
+  },
+  PHANTOM_CLOAK: {
+    id: 'phantom_cloak',
+    name: 'Phantom Shroud',
+    icon: '👻',
+    duration: 15.0,
+    desc: 'Complete Invisibility to Predators, +150% Ambush Critical Damage!',
+    tint: [0.85, 0.25, 0.95],
+    colorHex: '#c084fc'
+  },
+  SONIC_SHOCKWAVE: {
+    id: 'sonic_shockwave',
+    name: 'Bio-Sonic EMP Stun',
+    icon: '💥',
+    duration: 15.0,
+    desc: 'Emits Ultrasonic Sonar Pulses that Freeze Nearby Predators & Bots!',
+    tint: [0.25, 0.95, 0.45],
+    colorHex: '#4ade80'
+  }
+};
+
 export const LANDMARKS = CORE_LANDMARKS;
 
 export class InfiniteOceanWorld {
@@ -46,6 +94,7 @@ export class InfiniteOceanWorld {
     this.landmarks = JSON.parse(JSON.stringify(CORE_LANDMARKS));
     this.discoveredCount = 0;
     this.collectibles = [];
+    this.superpowerRelics = [];
     this.fishSchools = [];
     this.mantaRays = [];
     this.marineSnow = [];
@@ -394,6 +443,28 @@ export class InfiniteOceanWorld {
       }
     }
 
+    // F. Superpower Relics in ocean chunks
+    if (rnd() < 0.42) {
+      const rx = x0 + rr(8, S - 8);
+      const rz = z0 + rr(8, S - 8);
+      const ry = this.getSeabedHeight(rx, rz) + rr(2.2, 5.5);
+      const rId = `relic_${cx}_${cz}`;
+      if (!this.superpowerRelics.some(r => r.id === rId)) {
+        const pTypes = Object.values(SUPERPOWERS);
+        const pType = pTypes[Math.floor(rnd() * pTypes.length)];
+        this.superpowerRelics.push({
+          id: rId,
+          name: `${pType.name} Relic`,
+          type: pType,
+          pos: [rx, ry, rz],
+          collected: false,
+          respawnTimer: 0.0,
+          seed: rnd() * TAU,
+          pulsePhase: rnd() * TAU
+        });
+      }
+    }
+
     return {
       key: `${cx},${cz}`,
       cx, cz,
@@ -437,6 +508,58 @@ export class InfiniteOceanWorld {
       pos: [-24, this.getSeabedHeight(-24, -18), -18],
       yaw: 0.45,
       scale: 2.2
+    });
+
+    // Guaranteed Landmark Superpower Relics
+    this.superpowerRelics.push({
+      id: 'relic_galleon',
+      name: 'Galleon Aegis (Titan Shield)',
+      type: SUPERPOWERS.TITAN_AEGIS,
+      pos: [58, this.getSeabedHeight(58, 12) + 4.2, 12],
+      collected: false,
+      respawnTimer: 0.0,
+      seed: 0.5,
+      pulsePhase: 0.0
+    });
+    this.superpowerRelics.push({
+      id: 'relic_trench',
+      name: 'Abyssal Spark (Lightning Surge)',
+      type: SUPERPOWERS.LIGHTNING_SURGE,
+      pos: [12, this.getSeabedHeight(12, 92) + 3.8, 92],
+      collected: false,
+      respawnTimer: 0.0,
+      seed: 1.2,
+      pulsePhase: 1.0
+    });
+    this.superpowerRelics.push({
+      id: 'relic_arch',
+      name: 'Cathedral Core (Vortex Cannon)',
+      type: SUPERPOWERS.VORTEX_TORPEDO,
+      pos: [-24, this.getSeabedHeight(-24, -18) + 4.5, -18],
+      collected: false,
+      respawnTimer: 0.0,
+      seed: 2.1,
+      pulsePhase: 2.0
+    });
+    this.superpowerRelics.push({
+      id: 'relic_kelp',
+      name: 'Kelp Shroud (Phantom Cloak)',
+      type: SUPERPOWERS.PHANTOM_CLOAK,
+      pos: [-2, this.getSeabedHeight(-2, -78) + 5.0, -78],
+      collected: false,
+      respawnTimer: 0.0,
+      seed: 3.3,
+      pulsePhase: 3.0
+    });
+    this.superpowerRelics.push({
+      id: 'relic_atoll',
+      name: 'Solar Resonator (Bio-Sonic EMP)',
+      type: SUPERPOWERS.SONIC_SHOCKWAVE,
+      pos: [-38, this.getSeabedHeight(-38, 28) + 3.2, 28],
+      collected: false,
+      respawnTimer: 0.0,
+      seed: 4.5,
+      pulsePhase: 4.0
     });
   }
 
@@ -699,6 +822,45 @@ export class InfiniteOceanWorld {
     return mesh.toBuffers();
   }
 
+  buildSuperpowerRelicMesh() {
+    const mesh = new Mesh();
+    // 1. Faceted Octahedron Crystal Core (radius ~0.65m, height 1.3m)
+    const topV = mesh.vertex(0, 0.65, 0, 0, 1, 0, 0.5, 1.0, 1.0, 1.0, 1.0, 1.0);
+    const botV = mesh.vertex(0, -0.65, 0, 0, -1, 0, 0.5, 0.0, 0.8, 0.8, 0.9, 1.0);
+
+    const midRing = [];
+    const segs = 6;
+    const r = 0.52;
+    for (let i = 0; i < segs; i++) {
+      const a = (i / segs) * TAU;
+      midRing.push(mesh.vertex(cos(a) * r, 0, sin(a) * r, cos(a), 0, sin(a), i / segs, 0.5, 0.95, 0.95, 1.0, 1.0));
+    }
+
+    for (let i = 0; i < segs; i++) {
+      const next = (i + 1) % segs;
+      // Top pyramid faces
+      mesh.tri(topV, midRing[i], midRing[next]);
+      // Bottom pyramid faces
+      mesh.tri(botV, midRing[next], midRing[i]);
+    }
+
+    // 2. Tilted Orbital Celestial Halo Ring (radius 0.88m)
+    const haloPoints = [];
+    const haloSegs = 14;
+    const haloR = 0.88;
+    for (let i = 0; i <= haloSegs; i++) {
+      const a = (i / haloSegs) * TAU;
+      const x = cos(a) * haloR;
+      const y = sin(a) * haloR * 0.42;
+      const z = sin(a) * haloR * 0.9;
+      haloPoints.push([x, y, z]);
+    }
+    mesh.tube(haloPoints, 0.038, 4, true, false, () => [1.0, 1.0, 1.0, 1.0]);
+
+    mesh.computeVertexNormals();
+    return mesh.toBuffers();
+  }
+
   // ----------------------------------------------------------------
   // Marine Snow & Schools
   // ----------------------------------------------------------------
@@ -837,9 +999,33 @@ export class InfiniteOceanWorld {
       }
     }
 
+    // 6. Check Superpower Relic Pickups & Respawning
+    const collectedSuperpowers = [];
+    for (const relic of this.superpowerRelics) {
+      relic.pulsePhase += dt * 3.5;
+      if (relic.collected) {
+        relic.respawnTimer -= dt;
+        if (relic.respawnTimer <= 0) {
+          relic.collected = false;
+        }
+      } else {
+        const d = hypot(
+          playerFishPos[0] - relic.pos[0],
+          playerFishPos[1] - relic.pos[1],
+          playerFishPos[2] - relic.pos[2]
+        );
+        if (d <= 2.4) {
+          relic.collected = true;
+          relic.respawnTimer = 45.0; // Automatically respawns after 45 seconds
+          collectedSuperpowers.push(relic);
+        }
+      }
+    }
+
     return {
       newDiscoveries,
       collectedPearls,
+      collectedSuperpowers,
       newChunks
     };
   }

@@ -36,6 +36,10 @@ export class NyxenGame {
     this.mantaGPU = null;
     this.schoolFishGPU = null;
     this.pearlGPU = null;
+    this.superpowerGPU = null;
+
+    // Superpowers State Machine
+    this.activeSuperpower = { type: null, timer: 0.0, maxDuration: 0.0 };
 
     // Game State
     this.activeSpeciesId = SPECIES.CLOWNFISH;
@@ -157,6 +161,7 @@ export class NyxenGame {
     this.mantaGPU = this.renderer.uploadMesh(this.world.buildMantaMesh());
     this.schoolFishGPU = this.renderer.uploadMesh(this.world.buildSchoolFishMesh());
     this.pearlGPU = this.renderer.uploadMesh(this.world.buildPearlMesh());
+    this.superpowerGPU = this.renderer.uploadMesh(this.world.buildSuperpowerRelicMesh());
 
     // Start Animation Loop
     requestAnimationFrame((t) => this.loop(t));
@@ -293,10 +298,21 @@ export class NyxenGame {
     const frameInput = this.input.getFrameInput();
 
     // 2. Physics & Player Fish Update
+    this.physics.hasLightning = (this.activeSuperpower && this.activeSuperpower.type && this.activeSuperpower.type.id === 'lightning_surge');
     this.physics.update(dt, frameInput, (x, z) => this.world.getSeabedHeight(x, z));
 
+    // 2.2 Superpower Active State & Countdown
+    if (this.activeSuperpower.timer > 0) {
+      this.activeSuperpower.timer -= dt;
+      if (this.activeSuperpower.timer <= 0) {
+        this.activeSuperpower.type = null;
+        this.activeSuperpower.timer = 0;
+        this.showToast('Superpower duration expired', 2000);
+      }
+    }
+
     // 2.5 Battle Royale Engine Update ("Apex Predator / Fish PUBG")
-    this.royale.update(dt, this.physics.position, this.physics.forward, frameInput.fire, frameInput.fireSecondary);
+    this.royale.update(dt, this.physics.position, this.physics.forward, frameInput.fire, frameInput.fireSecondary, this.activeSuperpower);
 
     // 3. World & Ecosystem Update
     const worldEvents = this.world.update(dt, this.physics.position);
@@ -319,6 +335,19 @@ export class NyxenGame {
         this.audio.playPearlCollect();
       }
       this.saveProgress();
+    }
+
+    // Process Collectible Superpowers
+    if (worldEvents.collectedSuperpowers && worldEvents.collectedSuperpowers.length > 0) {
+      for (const relic of worldEvents.collectedSuperpowers) {
+        this.activeSuperpower.type = relic.type;
+        this.activeSuperpower.timer = relic.type.duration || 25.0;
+        this.activeSuperpower.maxDuration = relic.type.duration || 25.0;
+        this.showToast(`⚡ ${relic.type.name.toUpperCase()} ACTIVATED! (${Math.ceil(this.activeSuperpower.timer)}s)`, 4000);
+        if (this.audio && this.audio.playPowerupPickup) {
+          this.audio.playPowerupPickup(relic.type);
+        }
+      }
     }
 
     // 4. Audio Simulation
@@ -384,6 +413,11 @@ export class NyxenGame {
       this.renderer.renderPearls(this.pearlGPU, this.world.collectibles, this.time);
     }
 
+    // Render Procedural Superpower Relics Across Ocean & Landmarks
+    if (this.superpowerGPU && this.world.superpowerRelics) {
+      this.renderer.renderSuperpowerRelics(this.world.superpowerRelics, this.superpowerGPU, this.time);
+    }
+
     // Render Player Fish (in chase cam or first person snout view)
     const activeMesh = this.speciesGPU[this.activeSpeciesId];
     if (activeMesh) {
@@ -396,6 +430,17 @@ export class NyxenGame {
         this.physics.pectoralPhase,
         this.physics.spec.scale,
         true
+      );
+    }
+
+    // Render Active Superpower 3D Aura / Forcefield Shield
+    if (this.activeSuperpower && this.activeSuperpower.type && this.pearlGPU) {
+      this.renderer.renderSuperpowerAura(
+        this.physics.position,
+        this.activeSuperpower,
+        this.pearlGPU,
+        this.time,
+        this.physics.spec.scale
       );
     }
 
@@ -563,6 +608,27 @@ export class NyxenGame {
           <span class="kf-victim">${kf.victim}</span>
         </div>
       `).join('');
+    }
+
+    // Superpower Active HUD Card
+    const spCard = document.getElementById('hud-superpower-card');
+    if (spCard) {
+      if (this.activeSuperpower && this.activeSuperpower.type && this.activeSuperpower.timer > 0) {
+        spCard.style.display = 'flex';
+        const spIcon = document.getElementById('hud-sp-icon');
+        const spName = document.getElementById('hud-sp-name');
+        const spTimer = document.getElementById('hud-sp-timer');
+        const spFill = document.getElementById('hud-sp-fill');
+        if (spIcon) spIcon.textContent = this.activeSuperpower.type.icon;
+        if (spName) spName.textContent = this.activeSuperpower.type.name;
+        if (spTimer) spTimer.textContent = `${Math.ceil(this.activeSuperpower.timer)}s`;
+        if (spFill) {
+          const pct = clamp((this.activeSuperpower.timer / this.activeSuperpower.maxDuration) * 100, 0, 100);
+          spFill.style.width = `${pct}%`;
+        }
+      } else {
+        spCard.style.display = 'none';
+      }
     }
   }
 }

@@ -640,6 +640,97 @@ export class SharedRenderer {
   }
 
   // ----------------------------------------------------------------
+  // Superpower Relics & 3D Forcefield Auras
+  // ----------------------------------------------------------------
+  renderSuperpowerRelics(relics, relicMeshGPU, time) {
+    if (!relics || relics.length === 0 || !relicMeshGPU) return;
+    const gl = this.gl;
+    gl.useProgram(this.programSolid);
+
+    const m = Mat4.create();
+    gl.bindVertexArray(relicMeshGPU.vao);
+
+    for (const relic of relics) {
+      if (relic.collected) continue;
+      // Distance culling from camera
+      const dx = relic.pos[0] - this.camPos[0];
+      const dz = relic.pos[2] - this.camPos[2];
+      if (dx * dx + dz * dz > 130.0 * 130.0) continue;
+
+      // Frustum culling
+      if (!this.isSphereVisible(relic.pos[0], relic.pos[1], relic.pos[2], 2.5)) continue;
+
+      const floatY = relic.pos[1] + Math.sin(time * 2.8 + relic.seed) * 0.4;
+      const s = 1.35 + 0.15 * Math.sin(time * 4.5 + relic.seed);
+      const yaw = time * 2.4 + relic.seed;
+      const cy = Math.cos(yaw), sy = Math.sin(yaw);
+
+      // Column-major Y-rotation * scale
+      m[0]  =  cy * s; m[1]  = 0;   m[2]  =  sy * s; m[3]  = 0;
+      m[4]  =  0;      m[5]  = s;   m[6]  =  0;      m[7]  = 0;
+      m[8]  = -sy * s; m[9]  = 0;   m[10] =  cy * s; m[11] = 0;
+      m[12] = relic.pos[0];
+      m[13] = floatY;
+      m[14] = relic.pos[2];
+      m[15] = 1;
+
+      const tint = relic.type.tint || [1, 1, 1];
+      gl.uniform3fv(this.uSolid.uColorTint, tint);
+      gl.uniformMatrix4fv(this.uSolid.uModel, false, m);
+
+      gl.drawElements(gl.TRIANGLES, relicMeshGPU.indexCount, relicMeshGPU.indexType, 0);
+    }
+    gl.bindVertexArray(null);
+    gl.uniform3fv(this.uSolid.uColorTint, [1, 1, 1]);
+  }
+
+  // 3D Superpower Auras surrounding player fish
+  renderSuperpowerAura(pos, activeSuperpower, pearlMeshGPU, time, scale = 1.0) {
+    if (!activeSuperpower || !activeSuperpower.type || activeSuperpower.timer <= 0 || !pearlMeshGPU) return;
+    const gl = this.gl;
+    const type = activeSuperpower.type.id;
+
+    gl.useProgram(this.programSolid);
+    const m = Mat4.create();
+    gl.bindVertexArray(pearlMeshGPU.vao);
+
+    if (type === 'titan_aegis') {
+      // Shimmering Hexagonal Forcefield Bubble
+      const pulse = 1.0 + 0.08 * Math.sin(time * 8.0);
+      const s = scale * 2.2 * pulse;
+      m[0] = s; m[5] = s; m[10] = s;
+      m[12] = pos[0]; m[13] = pos[1]; m[14] = pos[2];
+
+      gl.uniform3fv(this.uSolid.uColorTint, [0.35, 0.92, 1.0]);
+      gl.uniformMatrix4fv(this.uSolid.uModel, false, m);
+      gl.drawElements(gl.TRIANGLES, pearlMeshGPU.indexCount, pearlMeshGPU.indexType, 0);
+    } else if (type === 'lightning_surge') {
+      // Crackling Electrical Corona Ring
+      const s = scale * 1.6 * (1.0 + 0.15 * Math.sin(time * 18.0));
+      m[0] = s; m[5] = s * 0.4; m[10] = s;
+      m[12] = pos[0]; m[13] = pos[1]; m[14] = pos[2];
+
+      gl.uniform3fv(this.uSolid.uColorTint, [1.0, 0.9, 0.2]);
+      gl.uniformMatrix4fv(this.uSolid.uModel, false, m);
+      gl.drawElements(gl.TRIANGLES, pearlMeshGPU.indexCount, pearlMeshGPU.indexType, 0);
+    } else if (type === 'sonic_shockwave') {
+      // Expanding Acoustic Ring
+      const phase = (time * 1.5) % 1.0;
+      const s = scale * (1.2 + phase * 6.0);
+      m[0] = s; m[5] = s * 0.2; m[10] = s;
+      m[12] = pos[0]; m[13] = pos[1]; m[14] = pos[2];
+
+      const fade = 1.0 - phase;
+      gl.uniform3fv(this.uSolid.uColorTint, [0.3 * fade, 1.0 * fade, 0.5 * fade]);
+      gl.uniformMatrix4fv(this.uSolid.uModel, false, m);
+      gl.drawElements(gl.TRIANGLES, pearlMeshGPU.indexCount, pearlMeshGPU.indexType, 0);
+    }
+
+    gl.bindVertexArray(null);
+    gl.uniform3fv(this.uSolid.uColorTint, [1, 1, 1]);
+  }
+
+  // ----------------------------------------------------------------
   // NEW METHODS
   // ----------------------------------------------------------------
 

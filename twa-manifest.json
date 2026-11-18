@@ -1,0 +1,45 @@
+{
+  "packageId": "io.github.ajitov.nyxen",
+  "host": "ajitov.github.io",
+  "name": "NYXEN — Underwater Ocean Simulation & Battle Royale",
+  "launcherName": "NYXEN",
+  "display": "fullscreen",
+  "themeColor": "#0284c7",
+  "themeColorDark": "#04121f",
+  "navigationColor": "#04121f",
+  "navigationColorDark": "#04121f",
+  "navigationDividerColor": "#00000000",
+  "navigationDividerColorDark": "#00000000",
+  "backgroundColor": "#04121f",
+  "enableNotifications": false,
+  "startUrl": "/nyxen/index.html",
+  "iconUrl": "https://ajitov.github.io/nyxen/icons/icon-512.png",
+  "maskableIconUrl": "https://ajitov.github.io/nyxen/icons/icon-maskable-512.png",
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1,
+  "shortcuts": [
+    {
+      "name": "Battle Royale",
+      "shortName": "Royale",
+      "url": "/nyxen/index.html?mode=royale",
+      "chosenIconUrl": "https://ajitov.github.io/nyxen/icons/icon-192.png"
+    }
+  ],
+  "webManifestUrl": "https://ajitov.github.io/nyxen/manifest.json",
+  "fallbackType": "customtabs",
+  "features": {
+    "playBilling": {
+      "enabled": false
+    }
+  },
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": false,
+  "isChromeOSOnly": false,
+  "orientation": "landscape",
+  "signingKey": {
+    "path": "./android.keystore",
+    "alias": "nyxen"
+  }
+}

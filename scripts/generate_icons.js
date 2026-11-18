@@ -298,4 +298,72 @@ for (const cfg of configs) {
   console.log(`✓ Created icons/${cfg.name} (${buf.length} bytes, ${cfg.size}x${cfg.size})`);
 }
 
-console.log('All PWA Icons generated successfully!');
+// 5. Generate 1024x500 Google Play Store Feature Graphic Banner
+console.log('Generating Google Play Store Feature Graphic (1024x500)...');
+function renderFeatureGraphic(x, y, w, h) {
+  const nx = (x / w) * 2 - 1; // -1 to 1
+  const ny = (y / h) * 2 - 1; // -1 to 1
+
+  // Deep oceanic gradient
+  const gradT = Math.min(1.0, Math.max(0.0, (ny + 0.8) * 0.6));
+  let bgR = Math.round(3 + gradT * (4 - 3));
+  let bgG = Math.round(130 - gradT * (130 - 18));
+  let bgB = Math.round(200 - gradT * (200 - 31));
+
+  // Sun shafts
+  const shaft1 = Math.sin((nx * 1.5 - ny * 0.8) * 12.0);
+  if (shaft1 > 0.8 && ny < 0.2) {
+    bgR = Math.min(255, bgR + 15);
+    bgG = Math.min(255, bgG + 25);
+    bgB = Math.min(255, bgB + 35);
+  }
+
+  // Centered fish motif (scaled down horizontally to fit 16:9 banner)
+  const fx = (nx - 0.25) * 2.2;
+  const fy = (ny - 0.0) * 1.6;
+  const bodyDist = Math.pow(fx / 0.58, 2) + Math.pow(fy / 0.33, 2);
+
+  const isTail = (fx < -0.42 && fx > -0.88 && Math.abs(fy) < (-(fx + 0.42) * 0.75 + 0.08));
+  const isDorsal = (fx > -0.25 && fx < 0.28 && fy < 0 && fy > -0.48 && Math.abs(fx - 0.02) < 0.28);
+  const isVentral = (fx > -0.22 && fx < 0.22 && fy > 0 && fy < 0.44 && Math.abs(fx) < 0.22);
+
+  if (bodyDist <= 1.0 || isTail || isDorsal || isVentral) {
+    let r = 249, g = 115, b = 22;
+    if (fy > 0.15) { r = 217; g = 70; b = 12; }
+    else if (fy < -0.15) { r = 251; g = 146; b = 60; }
+
+    const midCurve = -0.05 + fy * 0.18;
+    const isTailBar = Math.abs(fx + 0.38) < 0.055 && bodyDist <= 0.95;
+    const isMidBar = Math.abs(fx - midCurve) < 0.075 && bodyDist <= 0.98;
+    const isHeadBar = Math.abs(fx - (0.30 - fy * 0.15)) < 0.065 && bodyDist <= 0.96;
+
+    if (isTailBar || isMidBar || isHeadBar) {
+      r = 255; g = 255; b = 255;
+    } else if (Math.abs(fx + 0.38) < 0.085 || Math.abs(fx - midCurve) < 0.105 || Math.abs(fx - (0.30 - fy * 0.15)) < 0.095) {
+      r = 15; g = 23; b = 42;
+    }
+
+    const eyeDist = Math.hypot(fx - 0.42, fy + 0.08);
+    if (eyeDist < 0.065) {
+      if (eyeDist < 0.02) { r = 255; g = 255; b = 255; }
+      else if (eyeDist < 0.04) { r = 0; g = 0; b = 0; }
+      else { r = 251; g = 191; b = 36; }
+    }
+
+    return [r, g, b, 255];
+  }
+
+  // Cyan bioluminescent accent ring around fish
+  const ringDist = Math.hypot(nx - 0.25, ny);
+  if (Math.abs(ringDist - 0.6) < 0.015) {
+    return [34, 211, 238, 180];
+  }
+
+  return [bgR, bgG, bgB, 255];
+}
+
+const bannerBuf = createPng(1024, 500, renderFeatureGraphic);
+fs.writeFileSync(path.join(iconsDir, 'feature-graphic-1024x500.png'), bannerBuf);
+console.log(`✓ Created icons/feature-graphic-1024x500.png (${bannerBuf.length} bytes, 1024x500)`);
+
+console.log('All PWA & Google Play Store Assets generated successfully!');

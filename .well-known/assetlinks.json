@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "io.github.ajitov.nyxen",
+      "sha256_cert_fingerprints": [
+        "14:6D:E9:44:C5:9F:5C:EB:16:40:17:45:9A:03:2E:85:4F:33:C2:CD:AB:45:67:45:6F:AA:4E:57:43:55:A2:7A"
+      ]
+    }
+  }
+]

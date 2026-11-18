@@ -9,6 +9,8 @@ import zlib from 'node:zlib';
 
 const FILES = [
   'index.html',
+  'manifest.json',
+  'sw.js',
   'src/math.js',
   'src/species.js',
   'src/fish_physics.js',
@@ -16,7 +18,8 @@ const FILES = [
   'src/renderer.js',
   'src/audio.js',
   'src/controls.js',
-  'src/game.js'
+  'src/game.js',
+  'src/royale.js'
 ];
 
 console.log('---------------------------------------------------------');

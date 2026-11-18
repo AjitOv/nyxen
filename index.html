@@ -2,10 +2,21 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>NYXEN — Underwater Exploration & Fish Character Experience</title>
+  
+  <!-- Progressive Web App (PWA) Manifest & Meta -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0284c7">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="NYXEN">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="description" content="100% procedural 3D underwater oceanic exploration, fish life simulation, and Apex Predator Battle Royale.">
+
   <link rel="icon" type="image/x-icon" href="/favicon.ico">
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='48' fill='%230284c7'/><ellipse cx='50' cy='50' rx='32' ry='18' fill='%23ea580c'/><path d='M42 32 v36 M58 35 v30' stroke='white' stroke-width='6'/></svg>">
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
   <style>
     :root {
       --cyan: #22d3ee;
@@ -590,43 +601,300 @@
       filter: brightness(1.2);
     }
 
-    /* Mobile Controls Touch Buttons */
-    .mobile-controls {
-      display: none;
+    /* PWA Install Button */
+    .pwa-install-btn {
+      background: linear-gradient(135deg, #0284c7 0%, #0d9488 100%) !important;
+      border-color: #38bdf8 !important;
+      color: #fff !important;
+      font-weight: 700 !important;
+      animation: pwaPulse 2.5s infinite;
+    }
+    @keyframes pwaPulse {
+      0%, 100% { box-shadow: 0 0 10px rgba(56, 189, 248, 0.4); }
+      50% { box-shadow: 0 0 20px rgba(56, 189, 248, 0.85); }
+    }
+
+    /* ------------------------------------------------------------- */
+    /* Mobile Touch Controls Layer & Dual Ergonomic Joysticks        */
+    /* ------------------------------------------------------------- */
+    .touch-controls-layer {
       position: absolute;
-      bottom: 100px;
-      right: 20px;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 45;
+      display: none; /* Auto-unhidden on touch devices / responsive viewports */
+    }
+
+    .touch-zone-left {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 50%;
+      height: 100%;
       pointer-events: auto;
+      touch-action: none;
+    }
+
+    .touch-zone-right {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 50%;
+      height: 100%;
+      pointer-events: auto;
+      touch-action: none;
+    }
+
+    /* Virtual Floating Joystick */
+    .joystick-base {
+      position: absolute;
+      width: 116px;
+      height: 116px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(14, 42, 71, 0.65) 0%, rgba(4, 18, 31, 0.88) 100%);
+      border: 2px solid rgba(34, 211, 238, 0.35);
+      box-shadow: 0 0 24px rgba(34, 211, 238, 0.25), inset 0 0 16px rgba(34, 211, 238, 0.15);
+      bottom: 110px;
+      left: 65px;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      opacity: 0.45;
+      transition: opacity 0.2s, border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .joystick-base.active {
+      opacity: 1.0;
+      border-color: var(--cyan);
+      box-shadow: 0 0 32px rgba(34, 211, 238, 0.55), inset 0 0 20px rgba(34, 211, 238, 0.3);
+    }
+
+    .joystick-nipple {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 48px;
+      height: 48px;
+      margin: -24px 0 0 -24px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #67e8f9 0%, #0284c7 75%, #0369a1 100%);
+      border: 2.5px solid #ffffff;
+      box-shadow: 0 0 18px rgba(34, 211, 238, 0.85);
+      pointer-events: none;
+      transition: transform 0.05s ease-out;
+    }
+
+    .joystick-hint {
+      position: absolute;
+      bottom: 42px;
+      left: 65px;
+      transform: translateX(-50%);
+      font-size: 10px;
+      letter-spacing: 1.5px;
+      color: rgba(148, 163, 184, 0.65);
+      font-weight: 700;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+
+    /* Right Touch Combat & Mobility Action Cluster */
+    .touch-action-cluster {
+      position: absolute;
+      bottom: 95px;
+      right: 18px;
+      display: flex;
+      align-items: flex-end;
+      gap: 16px;
+      pointer-events: none;
+    }
+
+    .touch-depth-group {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: center;
+      pointer-events: auto;
+    }
+
+    .touch-combat-group {
+      display: flex;
       flex-direction: column;
       gap: 12px;
-      z-index: 50;
-    }
-
-    .mobile-btn {
-      width: 54px;
-      height: 54px;
-      border-radius: 50%;
-      background: rgba(14, 42, 71, 0.85);
-      border: 2px solid var(--cyan);
-      color: #fff;
-      font-size: 11px;
-      font-weight: 700;
-      display: flex;
-      justify-content: center;
       align-items: center;
-      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+      pointer-events: auto;
     }
 
-    @media (max-width: 860px) {
+    .touch-btn {
+      pointer-events: auto;
+      border: none;
+      outline: none;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+      transition: transform 0.08s ease, filter 0.15s ease, box-shadow 0.15s ease;
+      touch-action: none;
+    }
+
+    .touch-btn:active, .touch-btn.active {
+      transform: scale(0.90) !important;
+      filter: brightness(1.3) !important;
+    }
+
+    /* Primary Water Jet Attack */
+    .touch-btn-fire {
+      width: 68px;
+      height: 68px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #0284c7 0%, #075985 70%, #032f4a 100%);
+      border: 2.5px solid var(--cyan);
+      box-shadow: 0 0 24px rgba(34, 211, 238, 0.55);
+      color: #fff;
+    }
+
+    .touch-btn-fire .touch-icon {
+      font-size: 24px;
+      line-height: 1;
+    }
+
+    .touch-btn-fire .touch-label {
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      margin-top: 2px;
+    }
+
+    /* Secondary Venom Barrage */
+    .touch-btn-venom {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #9333ea 0%, #6b21a8 70%, #3b0764 100%);
+      border: 2px solid #c084fc;
+      box-shadow: 0 0 18px rgba(192, 132, 252, 0.45);
+      color: #fff;
+    }
+
+    .touch-btn-venom .touch-icon {
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    .touch-btn-venom .touch-label {
+      font-size: 8px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      margin-top: 2px;
+    }
+
+    /* Burst Sprint */
+    .touch-btn-burst {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #ea580c 0%, #c2410c 70%, #7c2d12 100%);
+      border: 2px solid #fb923c;
+      box-shadow: 0 0 18px rgba(251, 146, 60, 0.45);
+      color: #fff;
+    }
+
+    .touch-btn-burst .touch-icon {
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    .touch-btn-burst .touch-label {
+      font-size: 8px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      margin-top: 2px;
+    }
+
+    /* Depth Vertical Buttons (Ascend / Descend) */
+    .touch-btn-vert {
+      width: 46px;
+      height: 46px;
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.88);
+      border: 1.5px solid rgba(148, 163, 184, 0.45);
+      color: #e2e8f0;
+    }
+
+    .touch-btn-vert .touch-icon {
+      font-size: 13px;
+      line-height: 1;
+    }
+
+    .touch-btn-vert .touch-label {
+      font-size: 8px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      margin-top: 2px;
+      color: #94a3b8;
+    }
+
+    /* ------------------------------------------------------------- */
+    /* Mobile & Tablet Responsive Optimizations                      */
+    /* ------------------------------------------------------------- */
+    @media (hover: none) and (pointer: coarse), (max-width: 900px) {
+      .touch-controls-layer {
+        display: block !important;
+      }
+      .hud-layer {
+        padding: 8px 10px;
+        padding-top: max(8px, env(safe-area-inset-top));
+        padding-bottom: max(8px, env(safe-area-inset-bottom));
+      }
+      .brand-box {
+        padding: 6px 10px;
+      }
+      .brand-title {
+        font-size: 16px;
+      }
+      .hud-top-right {
+        gap: 6px;
+      }
+      .glass-btn {
+        padding: 6px 10px;
+        font-size: 11px;
+      }
+      .fps-badge {
+        display: none; /* Free up mobile header space */
+      }
+      .fish-key-hint {
+        display: none; /* Hide desktop numbers on mobile */
+      }
       .fish-selector-strip {
         max-width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scroll-snap-type: x mandatory;
+        padding: 6px 8px;
+        gap: 6px;
+      }
+      .fish-selector-btn {
+        scroll-snap-align: start;
+        padding: 6px 10px;
+        font-size: 11px;
+        flex-shrink: 0;
+      }
+      .telemetry-card {
+        padding: 8px 12px;
+        font-size: 11px;
+        max-width: 150px;
       }
       .hud-footer {
         flex-direction: column;
         align-items: stretch;
-      }
-      .mobile-controls {
-        display: flex;
+        gap: 8px;
       }
     }
 
@@ -681,6 +949,8 @@
       </div>
 
       <div class="hud-top-right">
+        <button class="glass-btn pwa-install-btn" id="pwa-install-btn" style="display: none;" title="Install NYXEN Progressive Web App">📲 INSTALL</button>
+        <button class="glass-btn" id="fullscreen-btn" title="Toggle Fullscreen">⛶</button>
         <div class="fps-badge" id="hud-fps">60 FPS</div>
         <button class="glass-btn royale-btn" id="royale-btn" title="Toggle Apex Predator Battle Royale Mode (R / B)">⚔️ ROYALE (R)</button>
         <button class="glass-btn" id="sound-toggle" title="Toggle Sound (M)">🔊</button>
@@ -783,11 +1053,48 @@
     </footer>
   </div>
 
-  <!-- Mobile Touch On-Screen Buttons -->
-  <div class="mobile-controls">
-    <button class="mobile-btn" id="m-burst-btn">BURST</button>
-    <button class="mobile-btn" id="m-cam-btn">CAM</button>
-    <button class="mobile-btn" id="m-log-btn">LOG</button>
+  <!-- Dedicated Mobile Dual-Touch Controls Layer -->
+  <div id="touch-controls-layer" class="touch-controls-layer">
+    <!-- Left Zone for Dynamic Floating Joystick -->
+    <div id="touch-zone-left" class="touch-zone-left">
+      <div id="joystick-base" class="joystick-base">
+        <div id="joystick-nipple" class="joystick-nipple"></div>
+      </div>
+      <div class="joystick-hint">SWIM JOYSTICK</div>
+    </div>
+
+    <!-- Right Zone for Camera Look & Touch Action Cluster -->
+    <div id="touch-zone-right" class="touch-zone-right">
+      <div class="touch-action-cluster">
+        <!-- Depth Vertical Controls -->
+        <div class="touch-depth-group">
+          <button class="touch-btn touch-btn-vert" id="btn-touch-ascend" title="Ascend / Surface" aria-label="Ascend">
+            <span class="touch-icon">▲</span>
+            <span class="touch-label">UP</span>
+          </button>
+          <button class="touch-btn touch-btn-vert" id="btn-touch-descend" title="Descend / Dive" aria-label="Descend">
+            <span class="touch-icon">▼</span>
+            <span class="touch-label">DOWN</span>
+          </button>
+        </div>
+
+        <!-- Combat & Speed Actions -->
+        <div class="touch-combat-group">
+          <button class="touch-btn touch-btn-burst" id="btn-touch-burst" title="Burst Sprint" aria-label="Burst Sprint">
+            <span class="touch-icon">⚡</span>
+            <span class="touch-label">BURST</span>
+          </button>
+          <button class="touch-btn touch-btn-venom" id="btn-touch-venom" title="Venom Barrage" aria-label="Venom Barrage">
+            <span class="touch-icon">🔱</span>
+            <span class="touch-label">VENOM</span>
+          </button>
+          <button class="touch-btn touch-btn-fire" id="btn-touch-fire" title="Water Jet Cannon" aria-label="Fire Water Jet">
+            <span class="touch-icon">💧</span>
+            <span class="touch-label">FIRE</span>
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Species Encyclopedia & Discovery Modal -->
@@ -882,18 +1189,30 @@
         document.getElementById('close-journal').addEventListener('click', closeJournal);
         document.getElementById('help-btn').addEventListener('click', openHelp);
         document.getElementById('close-help').addEventListener('click', closeHelp);
-        document.getElementById('m-log-btn').addEventListener('click', openJournal);
 
         document.getElementById('cam-toggle').addEventListener('click', () => {
-          game.input.onToggleCamera();
-        });
-        document.getElementById('m-cam-btn').addEventListener('click', () => {
           game.input.onToggleCamera();
         });
 
         document.getElementById('sound-toggle').addEventListener('click', () => {
           game.input.onToggleMute();
         });
+
+        const fsBtn = document.getElementById('fullscreen-btn');
+        if (fsBtn) {
+          fsBtn.addEventListener('click', () => {
+            if (!document.fullscreenElement) {
+              document.documentElement.requestFullscreen().catch(() => {});
+              fsBtn.textContent = '✕';
+            } else {
+              document.exitFullscreen().catch(() => {});
+              fsBtn.textContent = '⛶';
+            }
+          });
+          document.addEventListener('fullscreenchange', () => {
+            fsBtn.textContent = document.fullscreenElement ? '✕' : '⛶';
+          });
+        }
 
         const royaleBtn = document.getElementById('royale-btn');
         if (royaleBtn) {
@@ -902,11 +1221,38 @@
           });
         }
 
-        // Mobile burst touch
-        const mBurst = document.getElementById('m-burst-btn');
-        if (mBurst) {
-          mBurst.addEventListener('touchstart', (e) => { e.preventDefault(); game.input.input.sprint = true; });
-          mBurst.addEventListener('touchend', (e) => { e.preventDefault(); game.input.input.sprint = false; });
+        // Progressive Web App (PWA) Install Prompt
+        let deferredPrompt = null;
+        const installBtn = document.getElementById('pwa-install-btn');
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+          e.preventDefault();
+          deferredPrompt = e;
+          if (installBtn) {
+            installBtn.style.display = 'inline-flex';
+            installBtn.addEventListener('click', async () => {
+              if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                if (outcome === 'accepted') {
+                  installBtn.style.display = 'none';
+                }
+                deferredPrompt = null;
+              }
+            });
+          }
+        });
+
+        window.addEventListener('appinstalled', () => {
+          if (installBtn) installBtn.style.display = 'none';
+          game.showToast('🎉 NYXEN PWA Installed to Homescreen!', 3500);
+        });
+
+        // Register Service Worker for Instant Offline Ocean Experience
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.register('./sw.js')
+            .then(reg => console.log('NYXEN PWA ServiceWorker active:', reg.scope))
+            .catch(err => console.warn('PWA ServiceWorker error:', err));
         }
 
         // Quick Switch Strip
@@ -969,9 +1315,14 @@
           });
         }
 
-        // Welcome hint
+        // Welcome hint adapted for device
         setTimeout(() => {
-          game.showToast('Click canvas to lock steering • Left-click: Water Jet • Right-click/F: Venom Barrage • R: Battle Royale', 6000);
+          const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth <= 1024);
+          if (isTouch) {
+            game.showToast('📱 Touch: Left thumb to swim • Right thumb to steer & aim • 💧 FIRE • ⚡ BURST • 🔼/🔽 DEPTH', 6000);
+          } else {
+            game.showToast('Click canvas to lock steering • Left-click: Water Jet • Right-click/F: Venom Barrage • R: Battle Royale', 6000);
+          }
         }, 1200);
 
       } catch (err) {

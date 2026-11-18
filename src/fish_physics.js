@@ -131,15 +131,15 @@ export class FishPhysics {
     Vec3.cross(this.up, this.forward, this.right);
     Vec3.normalize(this.up, this.up);
 
-    // Forward drive
-    let forwardThrust = 0;
-    if (input.forward) forwardThrust += 1.0;
-    if (input.backward) forwardThrust -= 0.45;
+    // Forward drive (supports smooth analog touch joystick & keyboard)
+    let forwardThrust = (input.analogForward !== undefined && Math.abs(input.analogForward) > 0.02)
+      ? input.analogForward
+      : (input.forward ? 1.0 : (input.backward ? -0.45 : 0.0));
 
     // Strafe drive
-    let strafeThrust = 0;
-    if (input.strafeRight) strafeThrust += 0.5;
-    if (input.strafeLeft) strafeThrust -= 0.5;
+    let strafeThrust = (input.analogStrafe !== undefined && Math.abs(input.analogStrafe) > 0.02)
+      ? input.analogStrafe * 0.5
+      : (input.strafeRight ? 0.5 : (input.strafeLeft ? -0.5 : 0.0));
 
     // Vertical ascend / descend drive
     let verticalThrust = 0;
@@ -181,7 +181,7 @@ export class FishPhysics {
     this.position[2] += this.velocity[2] * dt;
 
     // 4. Biological Kinematics: Spine Undulation & Pectoral Sculling
-    const isActivelySwimming = (input.forward || input.backward || input.strafeLeft || input.strafeRight || input.ascend || input.descend);
+    const isActivelySwimming = (input.forward || input.backward || input.strafeLeft || input.strafeRight || input.ascend || input.descend || (input.analogForward && Math.abs(input.analogForward) > 0.1) || (input.analogStrafe && Math.abs(input.analogStrafe) > 0.1));
     const speedRatio = clamp(this.currentSpeed / (spec.speed + 0.01), 0.0, 2.0);
 
     // Dynamic tail beat frequency matching locomotive demand

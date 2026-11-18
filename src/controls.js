@@ -1,20 +1,23 @@
 // ============================================================================
-// NYXEN — Desktop Keyboard/Mouse & Mobile Touch Controls
-// Smooth analog steering, PointerLock, virtual touch joysticks & gesture controls.
+// NYXEN — Desktop Keyboard/Mouse & Mobile Dual-Touch Ergonomic Controls
+// Smooth analog steering, PointerLock, virtual dynamic joystick, camera swipe pad,
+// dedicated combat action buttons, and full responsive touch gesture handling.
 // ============================================================================
 
-import { clamp } from './math.js';
+import { clamp, hypot, sin, cos, atan2, min, max } from './math.js';
 
 export class InputManager {
   constructor(canvas) {
     this.canvas = canvas;
 
-    // Movement state
+    // Movement & Combat State
     this.input = {
       forward: false,
       backward: false,
       strafeLeft: false,
       strafeRight: false,
+      analogForward: 0.0,
+      analogStrafe: 0.0,
       ascend: false,
       descend: false,
       sprint: false,
@@ -25,8 +28,9 @@ export class InputManager {
     };
 
     this.mouseSensitivity = 0.0022;
+    this.touchSensitivity = 0.0055;
     this.isPointerLocked = false;
-    this.isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+    this.isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth <= 1024);
 
     // Callbacks
     this.onToggleCamera = null;
@@ -36,15 +40,26 @@ export class InputManager {
     this.onPhotoMode = null;
     this.onToggleRoyale = null;
 
-    // Touch joystick trackers
-    this.touches = new Map();
-    this.leftStick = { active: false, id: null, startX: 0, startY: 0, curX: 0, curY: 0 };
-    this.rightStick = { active: false, id: null, startX: 0, startY: 0, curX: 0, curY: 0 };
+    // Virtual Joystick & Touch Aiming State
+    this.leftStick = {
+      active: false,
+      id: null,
+      startX: 0,
+      startY: 0,
+      curX: 0,
+      curY: 0,
+      maxRadius: 46
+    };
+
+    this.rightTouch = {
+      active: false,
+      id: null,
+      lastX: 0,
+      lastY: 0
+    };
 
     this.initDesktop();
-    if (this.isTouchDevice) {
-      this.initTouch();
-    }
+    this.initTouch();
   }
 
   initDesktop() {
@@ -92,7 +107,7 @@ export class InputManager {
           e.preventDefault();
           if (this.onToggleJournal) this.onToggleJournal();
           break;
-        // Number keys 1-8 for instant species quick-select!
+        // Number keys 1-0 for instant species quick-select!
         case 'Digit1': if (this.onSelectSpecies) this.onSelectSpecies(0); break;
         case 'Digit2': if (this.onSelectSpecies) this.onSelectSpecies(1); break;
         case 'Digit3': if (this.onSelectSpecies) this.onSelectSpecies(2); break;
@@ -151,6 +166,8 @@ export class InputManager {
 
     // Mouse buttons for firing water jet and secondary venom
     window.addEventListener('mousedown', (e) => {
+      // Ignore if clicking on UI buttons or modals
+      if (e.target.closest('button, .modal-content, .hud-header, .hud-footer, .species-card')) return;
       if (e.button === 0) {
         this.input.fire = true;
       } else if (e.button === 2) {
@@ -166,14 +183,14 @@ export class InputManager {
       }
     });
 
-    // Prevent context menu on right-click so right-click fires venom spines!
+    // Prevent context menu on right-click so right-click fires venom spines cleanly
     this.canvas.addEventListener('contextmenu', (e) => {
       e.preventDefault();
     });
 
     // PointerLock for smooth mouse look
     this.canvas.addEventListener('click', () => {
-      if (!this.isPointerLocked && document.pointerLockElement !== this.canvas) {
+      if (!this.isPointerLocked && document.pointerLockElement !== this.canvas && !this.isTouchDevice) {
         this.canvas.requestPointerLock().catch(() => {});
       }
     });
@@ -184,71 +201,180 @@ export class InputManager {
 
     window.addEventListener('mousemove', (e) => {
       if (this.isPointerLocked) {
-        // Delta mouse controls yaw and pitch
         this.input.yaw -= e.movementX * this.mouseSensitivity;
         this.input.pitch -= e.movementY * this.mouseSensitivity;
       }
     });
   }
 
+  // =========================================================================
+  // Mobile Multi-Touch Ergonomics (Dual Virtual Joystick & Action Buttons)
+  // =========================================================================
   initTouch() {
-    const el = this.canvas;
+    // 1. Hook Mobile Touch Action Buttons
+    const bindTouchBtn = (id, onDown, onUp) => {
+      const btn = document.getElementById(id);
+      if (!btn) return;
 
-    el.addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      const rect = el.getBoundingClientRect();
-      const halfW = rect.width * 0.5;
+      const handleDown = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        btn.classList.add('active');
+        if (navigator.vibrate) {
+          try { navigator.vibrate(10); } catch (_) {}
+        }
+        onDown();
+      };
+
+      const handleUp = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        btn.classList.remove('active');
+        onUp();
+      };
+
+      btn.addEventListener('pointerdown', handleDown, { passive: false });
+      btn.addEventListener('pointerup', handleUp, { passive: false });
+      btn.addEventListener('pointercancel', handleUp, { passive: false });
+      btn.addEventListener('touchstart', handleDown, { passive: false });
+      btn.addEventListener('touchend', handleUp, { passive: false });
+      btn.addEventListener('touchcancel', handleUp, { passive: false });
+    };
+
+    // Primary Attack: Water Jet
+    bindTouchBtn('btn-touch-fire',
+      () => { this.input.fire = true; },
+      () => { this.input.fire = false; }
+    );
+
+    // Secondary Attack: Lionfish Venom Barrage
+    bindTouchBtn('btn-touch-venom',
+      () => { this.input.fireSecondary = true; },
+      () => { this.input.fireSecondary = false; }
+    );
+
+    // Sprint Burst
+    bindTouchBtn('btn-touch-burst',
+      () => { this.input.sprint = true; },
+      () => { this.input.sprint = false; }
+    );
+
+    // Ascend / Surface
+    bindTouchBtn('btn-touch-ascend',
+      () => { this.input.ascend = true; },
+      () => { this.input.ascend = false; }
+    );
+
+    // Descend / Dive
+    bindTouchBtn('btn-touch-descend',
+      () => { this.input.descend = true; },
+      () => { this.input.descend = false; }
+    );
+
+    // 2. Dual Touch Zones (Left: Joystick Movement, Right: Camera Look)
+    const touchLayer = document.getElementById('touch-controls-layer') || this.canvas;
+    const joystickBase = document.getElementById('joystick-base');
+    const joystickNipple = document.getElementById('joystick-nipple');
+
+    const updateNippleVisual = (dx, dy) => {
+      if (!joystickNipple) return;
+      joystickNipple.style.transform = `translate(${dx}px, ${dy}px)`;
+    };
+
+    const positionJoystickBase = (x, y) => {
+      if (!joystickBase) return;
+      joystickBase.style.left = `${x}px`;
+      joystickBase.style.top = `${y}px`;
+      joystickBase.classList.add('active');
+    };
+
+    const resetJoystickVisual = () => {
+      if (joystickNipple) {
+        joystickNipple.style.transform = 'translate(0px, 0px)';
+      }
+      if (joystickBase) {
+        joystickBase.classList.remove('active');
+        // Reset to default ergonomic location
+        joystickBase.style.left = '';
+        joystickBase.style.top = '';
+      }
+    };
+
+    touchLayer.addEventListener('touchstart', (e) => {
+      const halfW = window.innerWidth * 0.5;
 
       for (let i = 0; i < e.changedTouches.length; i++) {
         const t = e.changedTouches[i];
-        const x = t.clientX - rect.left;
-        const y = t.clientY - rect.top;
 
-        if (x < halfW && !this.leftStick.active) {
-          // Left half -> Move stick
+        // Ignore touches directly targeting action buttons
+        const targetEl = document.elementFromPoint(t.clientX, t.clientY);
+        if (targetEl && targetEl.closest('.touch-btn, .glass-btn, .fish-selector-btn, .modal-content')) {
+          continue;
+        }
+
+        if (t.clientX < halfW && !this.leftStick.active) {
+          // Left touch -> Virtual Floating Analog Joystick
+          e.preventDefault();
           this.leftStick.active = true;
           this.leftStick.id = t.identifier;
-          this.leftStick.startX = x;
-          this.leftStick.startY = y;
-          this.leftStick.curX = x;
-          this.leftStick.curY = y;
-        } else if (x >= halfW && !this.rightStick.active) {
-          // Right half -> Aim/Turn stick
-          this.rightStick.active = true;
-          this.rightStick.id = t.identifier;
-          this.rightStick.startX = x;
-          this.rightStick.startY = y;
-          this.rightStick.curX = x;
-          this.rightStick.curY = y;
+          this.leftStick.startX = t.clientX;
+          this.leftStick.startY = t.clientY;
+          this.leftStick.curX = t.clientX;
+          this.leftStick.curY = t.clientY;
+
+          positionJoystickBase(t.clientX, t.clientY);
+          updateNippleVisual(0, 0);
+        } else if (t.clientX >= halfW && !this.rightTouch.active) {
+          // Right touch -> Smooth Camera Look & Aiming
+          e.preventDefault();
+          this.rightTouch.active = true;
+          this.rightTouch.id = t.identifier;
+          this.rightTouch.lastX = t.clientX;
+          this.rightTouch.lastY = t.clientY;
         }
       }
     }, { passive: false });
 
-    el.addEventListener('touchmove', (e) => {
-      e.preventDefault();
-      const rect = el.getBoundingClientRect();
-
+    touchLayer.addEventListener('touchmove', (e) => {
       for (let i = 0; i < e.changedTouches.length; i++) {
         const t = e.changedTouches[i];
-        const x = t.clientX - rect.left;
-        const y = t.clientY - rect.top;
 
         if (this.leftStick.active && t.identifier === this.leftStick.id) {
-          this.leftStick.curX = x;
-          this.leftStick.curY = y;
-          const dx = x - this.leftStick.startX;
-          const dy = y - this.leftStick.startY;
-          this.input.forward = dy < -18;
-          this.input.backward = dy > 18;
-          this.input.strafeLeft = dx < -18;
-          this.input.strafeRight = dx > 18;
-        } else if (this.rightStick.active && t.identifier === this.rightStick.id) {
-          const dx = x - this.rightStick.curX;
-          const dy = y - this.rightStick.curY;
-          this.rightStick.curX = x;
-          this.rightStick.curY = y;
-          this.input.yaw -= dx * 0.006;
-          this.input.pitch -= dy * 0.006;
+          e.preventDefault();
+          this.leftStick.curX = t.clientX;
+          this.leftStick.curY = t.clientY;
+
+          const dx = t.clientX - this.leftStick.startX;
+          const dy = t.clientY - this.leftStick.startY;
+          const dist = hypot(dx, dy);
+          const maxR = this.leftStick.maxRadius;
+          const clampedDist = min(dist, maxR);
+          const angle = atan2(dy, dx);
+
+          const nippleX = cos(angle) * clampedDist;
+          const nippleY = sin(angle) * clampedDist;
+          updateNippleVisual(nippleX, nippleY);
+
+          // Proportional analog swimming values
+          const normDist = clampedDist / maxR;
+          this.input.analogForward = -sin(angle) * normDist;
+          this.input.analogStrafe = cos(angle) * normDist;
+
+          // Digital fallbacks for systems checking boolean flags
+          this.input.forward = this.input.analogForward > 0.22;
+          this.input.backward = this.input.analogForward < -0.22;
+          this.input.strafeRight = this.input.analogStrafe > 0.22;
+          this.input.strafeLeft = this.input.analogStrafe < -0.22;
+
+        } else if (this.rightTouch.active && t.identifier === this.rightTouch.id) {
+          e.preventDefault();
+          const dx = t.clientX - this.rightTouch.lastX;
+          const dy = t.clientY - this.rightTouch.lastY;
+          this.rightTouch.lastX = t.clientX;
+          this.rightTouch.lastY = t.clientY;
+
+          this.input.yaw -= dx * this.touchSensitivity;
+          this.input.pitch -= dy * this.touchSensitivity;
         }
       }
     }, { passive: false });
@@ -256,22 +382,26 @@ export class InputManager {
     const endTouch = (e) => {
       for (let i = 0; i < e.changedTouches.length; i++) {
         const t = e.changedTouches[i];
+
         if (this.leftStick.active && t.identifier === this.leftStick.id) {
           this.leftStick.active = false;
           this.leftStick.id = null;
+          this.input.analogForward = 0.0;
+          this.input.analogStrafe = 0.0;
           this.input.forward = false;
           this.input.backward = false;
           this.input.strafeLeft = false;
           this.input.strafeRight = false;
-        } else if (this.rightStick.active && t.identifier === this.rightStick.id) {
-          this.rightStick.active = false;
-          this.rightStick.id = null;
+          resetJoystickVisual();
+        } else if (this.rightTouch.active && t.identifier === this.rightTouch.id) {
+          this.rightTouch.active = false;
+          this.rightTouch.id = null;
         }
       }
     };
 
-    el.addEventListener('touchend', endTouch, { passive: false });
-    el.addEventListener('touchcancel', endTouch, { passive: false });
+    touchLayer.addEventListener('touchend', endTouch, { passive: false });
+    touchLayer.addEventListener('touchcancel', endTouch, { passive: false });
   }
 
   // Drain frame deltas
@@ -281,6 +411,8 @@ export class InputManager {
       backward: this.input.backward,
       strafeLeft: this.input.strafeLeft,
       strafeRight: this.input.strafeRight,
+      analogForward: this.input.analogForward,
+      analogStrafe: this.input.analogStrafe,
       ascend: this.input.ascend,
       descend: this.input.descend,
       sprint: this.input.sprint,
@@ -290,7 +422,7 @@ export class InputManager {
       pitch: this.input.pitch
     };
 
-    // Reset frame delta mouse turns
+    // Reset frame delta mouse / touch turns
     this.input.yaw = 0.0;
     this.input.pitch = 0.0;
 
